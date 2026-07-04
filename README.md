@@ -99,23 +99,6 @@ dotnet run --project src\MultiCopy\MultiCopy.csproj
 - [Hardcodet.NotifyIcon.Wpf](https://github.com/hardcodet/wpf-notifyicon) 1.1.0 — 托盘图标
 - Inno Setup 6 — 安装包打包
 
-## 项目结构
-
-```
-MultiCopy/
-├── src/MultiCopy/            # 源代码
-│   ├── Models/               # 数据模型（剪贴板项、队列、分组）
-│   ├── Services/             # 服务层（剪贴板监听、热键、键盘钩子、主题、托盘…）
-│   ├── ViewModels/           # MVVM ViewModel
-│   ├── Views/                # XAML 视图
-│   ├── Native/               # Win32 P/Invoke
-│   ├── Infrastructure/       # 转换器、模板选择器等
-│   ├── Themes/               # 明暗主题、图标、样式
-│   ├── Assets/               # 图标、收款码等资源
-│   └── Properties/           # 发布配置
-└── MultiCopy.slnx            # 解决方案
-```
-
 ## 核心原理
 
 - **复制采集**：通过 `AddClipboardFormatListener` 注册剪贴板监听，接收 `WM_CLIPBOARDUPDATE` 消息，采集纯文本（`CF_UNICODETEXT`）与图片
@@ -130,6 +113,10 @@ MultiCopy/
 
 [MIT License](LICENSE)
 
-## 支持作者
+## 支持
 
-如果这个工具对你有帮助，可以在应用内「支持作者」对话框扫码支持 ☕
+如果 MultiCopy 能帮到你、让你的日常复制粘贴更顺手，不妨请作者喝杯水 ☕ 你的支持是我持续维护和优化这个工具的动力。
+
+<p align="center">
+  <img src="docs/support-wechat-qr.png" alt="微信收款码" width="240">
+</p>
