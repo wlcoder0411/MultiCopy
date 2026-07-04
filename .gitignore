@@ -436,6 +436,7 @@ dist/
 # 个人 / AI 工具工作目录（含本地路径与工作笔记，不入库）
 .trae/
 .workbuddy/
+.uploads/
 
 # 发布配置需保留：复现 dotnet publish 必需（覆盖上方官方模板的 *.pubxml 忽略规则）
 !src/MultiCopy/Properties/PublishProfiles/*.pubxml
