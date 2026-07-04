@@ -40,46 +40,66 @@
   .limit li{margin:4px 0}
   code{background:#0d1117;padding:1px 6px;border-radius:4px;font-size:12.5px;color:#79c0ff}
   .footer{margin-top:34px;padding-top:14px;border-top:1px solid var(--line);color:var(--dim);font-size:12px}
+  .badge{display:inline-block;background:var(--accent);color:#fff;padding:1px 7px;border-radius:4px;font-size:11px;font-weight:600;margin-left:6px}
+  .new{display:inline-block;background:#1f6feb;color:#fff;padding:1px 7px;border-radius:4px;font-size:11px;font-weight:600;margin-left:6px}
 </style>
 </head>
 <body>
 <div class="wrap">
 
   <h1>📋 <span class="em">MultiCopy</span> 快速使用指南</h1>
-  <p class="sub">多段连续复制 · 队列按序/选择性粘贴 · 置顶保护 · 内容分组 · 暗亮双主题 · 常驻置顶窗口</p>
+  <p class="sub">多段连续复制 · 队列按序/选择性粘贴 · 文本+图片采集 · 置顶持久化 · 内容分组 · 全局热键 · 搜索过滤 · 暗亮双主题</p>
 
   <h2>核心流程</h2>
   <div class="flow">
-    <div class="step"><span class="n">1</span><b>连续复制</b><span>在任意应用（网页/Word/记事本）多次 <kbd>Ctrl+C</kbd>，每段内容自动入队，无需切换记事本</span></div>
-    <div class="step"><span class="n">2</span><b>查看列表</b><span>置顶窗口实时显示所有复制项，序号即粘贴顺序（顶部=下一条）</span></div>
+    <div class="step"><span class="n">1</span><b>连续复制</b><span>在任意应用（网页/Word/记事本/截图工具）多次 <kbd>Ctrl+C</kbd>，每段文本或图片自动入队，无需切换记事本</span></div>
+    <div class="step"><span class="n">2</span><b>查看列表</b><span>按 <kbd>Alt+Z</kbd> 调出窗口，实时显示所有复制项，序号即粘贴顺序（顶部=下一条）</span></div>
     <div class="step"><span class="n">3</span><b>按序粘贴</b><span>开启模式后，在目标文档连续 <kbd>Ctrl+V</kbd>，每次输出下一条并自动消除</span></div>
     <div class="step"><span class="n">4</span><b>循环至空</b><span>继续按 <kbd>Ctrl+V</kbd> 直至非置顶项全部输出完毕</span></div>
   </div>
 
   <h2>操作与快捷键</h2>
   <table>
-    <tr><td>开启/关闭「队列粘贴模式」</td><td>点击顶部 <span class="pill off">队列粘贴：关</span> 按钮，开启变 <span class="pill on">队列粘贴：开</span>；模式开时 <kbd>Ctrl+V</kbd> 才会按序出队</td></tr>
+    <tr><td>调出/隐藏主窗口</td><td><kbd>Alt+Z</kbd>（全局热键，可在设置中自定义）<span class="new">v3.x</span></td></tr>
+    <tr><td>开启/关闭「按序粘贴模式」</td><td>点击顶部 <span class="pill off">按序粘贴：关</span> 按钮，开启变 <span class="pill on">按序粘贴：开</span>；模式开时 <kbd>Ctrl+V</kbd> 才会按序出队</td></tr>
     <tr><td>按序出队粘贴</td><td>模式开 + <kbd>Ctrl+V</kbd>（队列为空后自动恢复普通粘贴）</td></tr>
-    <tr><td>临时普通粘贴（逃生口）</td><td>模式开时按住 <kbd>Shift</kbd> + <kbd>Ctrl+V</kbd>，本次不消耗队列</td></tr>
+    <tr><td>临时普通粘贴（逃生口）</td><td>模式开时按 <kbd>Ctrl+Shift+V</kbd>，本次不消耗队列</td></tr>
     <tr><td>点选粘贴（普通项）</td><td>单击列表项 → 粘贴到当前光标并从列表移除</td></tr>
     <tr><td>点选粘贴（置顶项）</td><td><b>双击</b>置顶项 → 粘贴但<em>保留</em>在列表（可反复使用）</td></tr>
     <tr><td>置顶 / 取消置顶</td><td>点击项右侧 📌 置顶（移入置顶区）；置顶项点 📍 取消</td></tr>
     <tr><td>删除单项</td><td>点击项右侧 ✕</td></tr>
     <tr><td>清空普通队列</td><td>顶部「清空」按钮（置顶项不受影响，含所有分组）</td></tr>
+    <tr><td>搜索过滤</td><td>顶部搜索框输入关键词，实时过滤列表。文本按内容匹配，图片按元数据匹配；<kbd>Esc</kbd> 清空搜索框<span class="new">v3.x</span></td></tr>
     <tr><td>新建分组</td><td>顶部「+分组」按钮 → 输入名称。新建后<b>自动设为活动分组</b>，新复制内容归入此组</td></tr>
     <tr><td>切换活动分组</td><td>单击分组头（高亮 ● 标记）。活动组决定新复制内容归属；未选任何组则归入"未分组"</td></tr>
     <tr><td>折叠/展开分组</td><td>点击分组头左侧箭头（▶/▼）</td></tr>
     <tr><td>重命名/删除/清空分组</td><td>右键分组头 → 对应菜单项。删除分组时组内项<b>移至未分组</b>，不连带删除</td></tr>
-    <tr><td>移动项到其他分组</td><td><b>右键列表项</b> →「移动到分组…」→ 选择目标分组（含"未分组"）。当前所在分组会勾选并禁用。右键<b>不会</b>触发粘贴</td></tr>
-    <tr><td>显示/隐藏窗口</td><td>双击托盘图标，或托盘右键菜单</td></tr>
+    <tr><td>移动项到其他分组</td><td><b>右键列表项</b> →「移动到分组…」→ 选择目标分组。右键<b>不会</b>触发粘贴</td></tr>
+    <tr><td>监控开关</td><td>顶部「监控」开关按钮。关闭后完全静默待机（不采集 + 不拦截 Ctrl+V），与窗口可见性联动<span class="new">v3.x</span></td></tr>
     <tr><td>切换主题（暗/亮）</td><td>顶栏右侧太阳/月亮图标按钮。默认暗色，点击切亮色，再点切回。不记忆，重启默认暗色</td></tr>
+    <tr><td>设置对话框</td><td>顶栏齿轮图标 → 自定义全局热键（修饰键+按键组合）<span class="new">v3.x</span></td></tr>
+    <tr><td>显示/隐藏窗口</td><td><kbd>Alt+Z</kbd> 全局热键，或双击托盘图标，或托盘右键菜单</td></tr>
+    <tr><td>开机自启</td><td>托盘右键 →「开机自启」勾选（写注册表 HKCU Run 项，无需管理员；启动时仅驻留托盘不弹窗）<span class="new">v3.x</span></td></tr>
     <tr><td>退出程序</td><td>托盘右键 →「退出」（点窗口 ✕ 只是隐藏到托盘）</td></tr>
   </table>
 
   <div class="note">
     <b>置顶项</b> <span class="pill pin">Pin</span> 的作用：在 <kbd>Ctrl+V</kbd> 自动出队流水线中<b>被跳过、不消除</b>，
     只在你手动<b>双击</b>时才输出且保留——适合存放要反复粘贴的重要片段（如邮箱、签名、代码片段）。
+    置顶内容<b>持久化保存</b>到 <code>%APPDATA%\MultiCopy\pinned.json</code>，重启后不丢失。<span class="new">v3.x</span>
   </div>
+
+  <h2>文本与图片采集 <span class="badge">v3.x</span></h2>
+  <div class="grid">
+    <div class="card"><h3>📄 文本采集</h3><p>自动监听剪贴板，每次复制纯文本自动入队。含去重机制（500ms 时间窗口 + 内容比对），不会重复采集同一段文本。</p></div>
+    <div class="card"><h3>🖼️ 图片采集</h3><p>支持采集截图、复制的图片。图片格式按 <code>CF_DIBV5 &gt; PNG &gt; CF_DIB</code> 优先级读取。含去重（1500ms 时间窗口 + 尺寸+哈希双校验）。</p></div>
+  </div>
+  <table>
+    <tr><td>队列容量</td><td>最多保留 30 项（含文本与图片），超出自动移除最旧的非置顶项</td></tr>
+    <tr><td>超大图片</td><td>超过 4096×4096 像素的图片会被拒绝采集，避免内存占用过高</td></tr>
+    <tr><td>图片展示</td><td>列表中显示缩略图与来源应用名称</td></tr>
+    <tr><td>图片粘贴</td><td>点选或按序粘贴时，图片以 <code>CF_DIB</code> 格式写入剪贴板，目标应用直接粘贴为图片</td></tr>
+  </table>
 
   <h2>读写分离 · 互不干扰</h2>
   <div class="grid">
@@ -87,7 +107,7 @@
     <div class="card"><h3>窗口常驻置顶</h3><p>主窗口始终置顶且<b>不抢焦点</b>：点击列表项时目标应用（记事本等）保持焦点，粘贴直达光标处。</p></div>
   </div>
 
-  <h2>内容分组 · 跨文档归类收集</h2>
+  <h2>内容分组 · 范围 FIFO 出队 <span class="badge">v1.7+</span></h2>
   <div class="note">
     默认状态（未建任何分组）下，界面与行为<b>与无分组时完全一致</b>——所有内容在一个扁平列表中。分组是<b>可选启用</b>的，不破坏现有体验。
   </div>
@@ -95,21 +115,29 @@
     <div class="step"><span class="n">1</span><b>建分组</b><span>点顶部「+分组」命名。新建即自动成为活动分组（●标记）</span></div>
     <div class="step"><span class="n">2</span><b>归类收集</b><span>复制文档A内容→归入分组A；切到分组B后再复制→自动归入分组B</span></div>
     <div class="step"><span class="n">3</span><b>同屏浏览</b><span>所有分组同时可见，各带可折叠头(▶/▼)与项数。未分组项置顶显示</span></div>
-    <div class="step"><span class="n">4</span><b>按序输出</b><span>开模式后 <kbd>Ctrl+V</kbd> <b>全局 FIFO</b> 跨所有分组按复制时间先后输出，直至清空</span></div>
+    <div class="step"><span class="n">4</span><b>按序输出</b><span>开模式后 <kbd>Ctrl+V</kbd> 按<b>范围 FIFO</b> 输出（见下表规则）</span></div>
   </div>
   <table>
     <tr><td>分组作用范围</td><td>仅普通队列。置顶区独立于分组，不归属任何分组</td></tr>
-    <tr><td>出队顺序</td><td>全局 FIFO——跨所有分组+未分组按复制时间取最早，<b>不</b>受当前活动分组影响。活动分组只决定"新复制归到哪"</td></tr>
+    <tr><td>出队顺序（范围 FIFO）</td><td><b>活动分组非空</b>→仅该分组内按 <code>CreatedAt</code> 最早出队；<b>活动分组为空（null）</b>→全局 FIFO，跨所有分组+未分组按复制时间最早出队</td></tr>
     <tr><td>删除分组</td><td>组内项自动移至"未分组"，不会被删除；删除活动分组后活动组重置为未分组</td></tr>
-    <tr><td>持久化</td><td>不持久化。分组及内容仅本次运行有效，退出即清空（与队列行为一致）</td></tr>
+    <tr><td>持久化</td><td>分组及普通内容<b>不持久化</b>，退出即清空。仅<b>置顶项</b>持久化跨会话保留</td></tr>
   </table>
 
   <h2>运行与启动</h2>
   <table>
-    <tr><td>直接运行</td><td><code>src\MultiCopy\bin\Debug\net8.0-windows\MultiCopy.exe</code></td></tr>
+    <tr><td>直接运行</td><td>双击 <code>MultiCopy.exe</code>（单文件自包含，无需安装 .NET 运行时）</td></tr>
     <tr><td>从源码运行</td><td><code>dotnet run --project src\MultiCopy</code></td></tr>
-    <tr><td>开机自启</td><td>托盘右键 →「开机自启」勾选（写注册表 HKCU Run 项，无需管理员）</td></tr>
+    <tr><td>开机自启</td><td>托盘右键 →「开机自启」勾选（写注册表 HKCU Run 项，<code>--minimized</code> 参数仅驻留托盘不弹窗）</td></tr>
+    <tr><td>监控开关</td><td>关闭监控后完全静默待机：不采集剪贴板内容、不拦截 Ctrl+V。窗口隐藏时自动关闭，显示时自动开启</td></tr>
     <tr><td>单实例</td><td>已运行时再次启动会自动退出，不会多开</td></tr>
+  </table>
+
+  <h2>数据存储</h2>
+  <table>
+    <tr><td>置顶项</td><td><code>%APPDATA%\MultiCopy\pinned.json</code>（含文本与图片，原子写入）+ <code>%APPDATA%\MultiCopy\images\&lt;id&gt;.png</code>（图片文件）</td></tr>
+    <tr><td>设置</td><td><code>%APPDATA%\MultiCopy\settings.json</code>（自定义热键等配置）</td></tr>
+    <tr><td>普通队列</td><td>仅内存，不持久化，退出即清空</td></tr>
   </table>
 
   <h2>已知限制</h2>
@@ -117,20 +145,24 @@
     <li><b>右键粘贴</b>不走键盘钩子，不会触发出队——请用 <kbd>Ctrl+V</kbd>。</li>
     <li><b>UAC 不对称</b>：若目标应用以管理员权限运行而 MultiCopy 不是，钩子收不到其按键。需对管理员应用操作时，请以管理员身份运行 MultiCopy（修改 <code>app.manifest</code> 为 <code>requireAdministrator</code>）。</li>
     <li>控制台/部分游戏等非标准粘贴应用可能不响应模拟 <kbd>Ctrl+V</kbd>。</li>
-    <li>仅采集纯文本（富文本/HTML/图片自动转为纯文本）。</li>
+    <li>图片搜索仅按元数据匹配（来源应用、时间），不含 OCR 文字识别。</li>
+    <li>主题选择不持久化，每次启动默认暗色主题。</li>
   </ul>
 
   <h2>项目结构</h2>
   <table>
-    <tr><td><code>Native/</code></td><td>Win32 P/Invoke：键盘钩子、剪贴板监听、SendInput、窗口样式</td></tr>
-    <tr><td><code>Models/</code></td><td>ClipboardItem、ClipboardGroup（分组）、ClipboardQueue（未分组+分组+置顶，全局FIFO出队）</td></tr>
-    <tr><td><code>State/AppState.cs</code></td><td>全局标志位：模式开关、活动分组、防回环、防重入</td></tr>
-    <tr><td><code>Services/</code></td><td>剪贴板服务、监听器、键盘钩子、粘贴执行器、托盘</td></tr>
-    <tr><td><code>ViewModels/</code> · <code>MainWindow.xaml</code></td><td>MVVM 视图模型与置顶列表 UI</td></tr>
+    <tr><td><code>Native/</code></td><td>Win32 P/Invoke：键盘钩子、剪贴板监听、SendInput、窗口样式、热键注册</td></tr>
+    <tr><td><code>Models/</code></td><td>ClipboardItem（文本/图片）、ClipboardGroup（分组）、ClipboardQueue（队列+范围FIFO出队）</td></tr>
+    <tr><td><code>State/AppState.cs</code></td><td>全局标志位：模式开关、活动分组、监控开关、防回环、防重入</td></tr>
+    <tr><td><code>Services/</code></td><td>剪贴板监听/服务、键盘钩子、粘贴执行器、热键服务、托盘、主题、置顶持久化、设置存储</td></tr>
+    <tr><td><code>ViewModels/</code></td><td>MainViewModel（MVVM 视图模型）</td></tr>
+    <tr><td><code>Views/</code></td><td>主窗口 + 设置对话框 + 分组输入对话框 + 支持作者对话框</td></tr>
+    <tr><td><code>Themes/</code></td><td>Dark/Light 主题、图标资源、通用样式（13 个语义 Token）</td></tr>
+    <tr><td><code>Infrastructure/</code></td><td>转换器、模板选择器、图标工厂、热键格式化器</td></tr>
   </table>
 
   <div class="footer">
-    MultiCopy v1.2 · C# WPF .NET 8 · 含内容分组+暗亮双主题+内联线性图标 · 技术方案详见 <code>.workbuddy/plans/</code>
+    MultiCopy v3.6 · C# WPF .NET 8 · 文本+图片采集 · 置顶持久化 · 全局热键 · 内容分组 · 搜索过滤 · 暗亮双主题
   </div>
 
 </div>
