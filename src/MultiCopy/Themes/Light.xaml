@@ -1,0 +1,39 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=mscorlib">
+
+    <!-- ============ 亮色主题语义 Token ============
+         与 Dark.xaml 同名 key，切换主题时 ThemeService 替换 MergedDictionaries 项。 -->
+
+    <Color x:Key="BackgroundColor">#FFFFFF</Color>
+    <Color x:Key="CardBackgroundColor">#F4F4F5</Color>
+    <Color x:Key="CardBackgroundHoverColor">#E4E4E7</Color>
+    <Color x:Key="BorderColor">#D4D4D8</Color>
+    <Color x:Key="AccentColor">#6366F1</Color>
+    <Color x:Key="AccentForegroundColor">#FFFFFF</Color>
+    <Color x:Key="AccentBackgroundColor">#EEF2FF</Color>
+    <Color x:Key="ForegroundColor">#18181B</Color>
+    <Color x:Key="ForegroundDimColor">#71717A</Color>
+    <Color x:Key="PinColor">#B45309</Color>
+    <Color x:Key="PinBackgroundColor">#FEF3C7</Color>
+    <Color x:Key="PinBackgroundHoverColor">#FDE68A</Color>
+    <Color x:Key="HoverOverlayColor">#0F000000</Color>
+    <!-- 缩略图背景：略深于 CardBackground，防亮色图片透白边 -->
+    <Color x:Key="ThumbnailBackgroundColor">#E8E8E8</Color>
+
+    <SolidColorBrush x:Key="BackgroundBrush" Color="{StaticResource BackgroundColor}" />
+    <SolidColorBrush x:Key="CardBackgroundBrush" Color="{StaticResource CardBackgroundColor}" />
+    <SolidColorBrush x:Key="CardBackgroundHoverBrush" Color="{StaticResource CardBackgroundHoverColor}" />
+    <SolidColorBrush x:Key="BorderBrush" Color="{StaticResource BorderColor}" />
+    <SolidColorBrush x:Key="AccentBrush" Color="{StaticResource AccentColor}" />
+    <SolidColorBrush x:Key="AccentForegroundBrush" Color="{StaticResource AccentForegroundColor}" />
+    <SolidColorBrush x:Key="AccentBackgroundBrush" Color="{StaticResource AccentBackgroundColor}" />
+    <SolidColorBrush x:Key="ForegroundBrush" Color="{StaticResource ForegroundColor}" />
+    <SolidColorBrush x:Key="ForegroundDimBrush" Color="{StaticResource ForegroundDimColor}" />
+    <SolidColorBrush x:Key="PinBrush" Color="{StaticResource PinColor}" />
+    <SolidColorBrush x:Key="PinBackgroundBrush" Color="{StaticResource PinBackgroundColor}" />
+    <SolidColorBrush x:Key="PinBackgroundHoverBrush" Color="{StaticResource PinBackgroundHoverColor}" />
+    <SolidColorBrush x:Key="HoverOverlayBrush" Color="{StaticResource HoverOverlayColor}" />
+    <SolidColorBrush x:Key="ThumbnailBackgroundBrush" Color="{StaticResource ThumbnailBackgroundColor}" />
+
+</ResourceDictionary>

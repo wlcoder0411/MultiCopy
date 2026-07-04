@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>MultiCopy 快速使用指南</title>
+<style>
+  :root{
+    --bg:#1e1e1e; --card:#2a2a2a; --accent:#2ea043; --accent-off:#6e7681;
+    --pin:#e3b341; --fg:#e6e6e6; --dim:#9a9a9a; --line:#3a3a3a;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:32px;background:var(--bg);color:var(--fg);
+       font-family:"Segoe UI","Microsoft YaHei",system-ui,sans-serif;line-height:1.65;}
+  .wrap{max-width:820px;margin:0 auto}
+  h1{font-size:26px;margin:0 0 4px}
+  h1 .em{color:var(--accent)}
+  .sub{color:var(--dim);margin:0 0 28px;font-size:14px}
+  h2{font-size:17px;margin:30px 0 12px;padding-bottom:6px;border-bottom:1px solid var(--line);color:#fff}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .card{background:var(--card);border-radius:8px;padding:16px 18px}
+  .card h3{margin:0 0 8px;font-size:15px;color:#fff}
+  .card p{margin:0;font-size:13.5px;color:var(--dim)}
+  kbd{background:#0d1117;color:#e6e6e6;border:1px solid #444c56;border-radius:4px;
+      padding:1px 7px;font-size:12.5px;font-family:Consolas,monospace}
+  table{width:100%;border-collapse:collapse;font-size:13.5px}
+  td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  td:first-child{white-space:nowrap;width:42%;color:#fff}
+  td:last-child{color:var(--dim)}
+  .flow{display:flex;gap:10px;flex-wrap:wrap;align-items:stretch}
+  .step{flex:1;min-width:150px;background:var(--card);border-radius:8px;padding:14px;position:relative}
+  .step .n{position:absolute;top:10px;right:12px;color:var(--accent-off);font-weight:bold;font-size:13px}
+  .step b{display:block;color:#fff;font-size:14px;margin-bottom:4px}
+  .step span{font-size:12.5px;color:var(--dim)}
+  .pill{display:inline-block;padding:2px 9px;border-radius:10px;font-size:12px;font-weight:600}
+  .on{background:var(--accent);color:#fff}
+  .off{background:var(--accent-off);color:#fff}
+  .pin{background:var(--pin);color:#1e1e1e}
+  .note{background:#2d2615;border-left:3px solid var(--pin);border-radius:4px;padding:10px 14px;font-size:13px;color:#e6d8b0;margin:10px 0}
+  .limit{font-size:13px;color:var(--dim)}
+  .limit li{margin:4px 0}
+  code{background:#0d1117;padding:1px 6px;border-radius:4px;font-size:12.5px;color:#79c0ff}
+  .footer{margin-top:34px;padding-top:14px;border-top:1px solid var(--line);color:var(--dim);font-size:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>📋 <span class="em">MultiCopy</span> 快速使用指南</h1>
+  <p class="sub">多段连续复制 · 队列按序/选择性粘贴 · 置顶保护 · 内容分组 · 暗亮双主题 · 常驻置顶窗口</p>
+
+  <h2>核心流程</h2>
+  <div class="flow">
+    <div class="step"><span class="n">1</span><b>连续复制</b><span>在任意应用（网页/Word/记事本）多次 <kbd>Ctrl+C</kbd>，每段内容自动入队，无需切换记事本</span></div>
+    <div class="step"><span class="n">2</span><b>查看列表</b><span>置顶窗口实时显示所有复制项，序号即粘贴顺序（顶部=下一条）</span></div>
+    <div class="step"><span class="n">3</span><b>按序粘贴</b><span>开启模式后，在目标文档连续 <kbd>Ctrl+V</kbd>，每次输出下一条并自动消除</span></div>
+    <div class="step"><span class="n">4</span><b>循环至空</b><span>继续按 <kbd>Ctrl+V</kbd> 直至非置顶项全部输出完毕</span></div>
+  </div>
+
+  <h2>操作与快捷键</h2>
+  <table>
+    <tr><td>开启/关闭「队列粘贴模式」</td><td>点击顶部 <span class="pill off">队列粘贴：关</span> 按钮，开启变 <span class="pill on">队列粘贴：开</span>；模式开时 <kbd>Ctrl+V</kbd> 才会按序出队</td></tr>
+    <tr><td>按序出队粘贴</td><td>模式开 + <kbd>Ctrl+V</kbd>（队列为空后自动恢复普通粘贴）</td></tr>
+    <tr><td>临时普通粘贴（逃生口）</td><td>模式开时按住 <kbd>Shift</kbd> + <kbd>Ctrl+V</kbd>，本次不消耗队列</td></tr>
+    <tr><td>点选粘贴（普通项）</td><td>单击列表项 → 粘贴到当前光标并从列表移除</td></tr>
+    <tr><td>点选粘贴（置顶项）</td><td><b>双击</b>置顶项 → 粘贴但<em>保留</em>在列表（可反复使用）</td></tr>
+    <tr><td>置顶 / 取消置顶</td><td>点击项右侧 📌 置顶（移入置顶区）；置顶项点 📍 取消</td></tr>
+    <tr><td>删除单项</td><td>点击项右侧 ✕</td></tr>
+    <tr><td>清空普通队列</td><td>顶部「清空」按钮（置顶项不受影响，含所有分组）</td></tr>
+    <tr><td>新建分组</td><td>顶部「+分组」按钮 → 输入名称。新建后<b>自动设为活动分组</b>，新复制内容归入此组</td></tr>
+    <tr><td>切换活动分组</td><td>单击分组头（高亮 ● 标记）。活动组决定新复制内容归属；未选任何组则归入"未分组"</td></tr>
+    <tr><td>折叠/展开分组</td><td>点击分组头左侧箭头（▶/▼）</td></tr>
+    <tr><td>重命名/删除/清空分组</td><td>右键分组头 → 对应菜单项。删除分组时组内项<b>移至未分组</b>，不连带删除</td></tr>
+    <tr><td>移动项到其他分组</td><td><b>右键列表项</b> →「移动到分组…」→ 选择目标分组（含"未分组"）。当前所在分组会勾选并禁用。右键<b>不会</b>触发粘贴</td></tr>
+    <tr><td>显示/隐藏窗口</td><td>双击托盘图标，或托盘右键菜单</td></tr>
+    <tr><td>切换主题（暗/亮）</td><td>顶栏右侧太阳/月亮图标按钮。默认暗色，点击切亮色，再点切回。不记忆，重启默认暗色</td></tr>
+    <tr><td>退出程序</td><td>托盘右键 →「退出」（点窗口 ✕ 只是隐藏到托盘）</td></tr>
+  </table>
+
+  <div class="note">
+    <b>置顶项</b> <span class="pill pin">Pin</span> 的作用：在 <kbd>Ctrl+V</kbd> 自动出队流水线中<b>被跳过、不消除</b>，
+    只在你手动<b>双击</b>时才输出且保留——适合存放要反复粘贴的重要片段（如邮箱、签名、代码片段）。
+  </div>
+
+  <h2>读写分离 · 互不干扰</h2>
+  <div class="grid">
+    <div class="card"><h3>边粘边复制</h3><p>粘贴未完成时仍可随时 <kbd>Ctrl+C</kbd> 追加新内容到队列末尾，复制与粘贴完全独立、并行不悖。</p></div>
+    <div class="card"><h3>窗口常驻置顶</h3><p>主窗口始终置顶且<b>不抢焦点</b>：点击列表项时目标应用（记事本等）保持焦点，粘贴直达光标处。</p></div>
+  </div>
+
+  <h2>内容分组 · 跨文档归类收集</h2>
+  <div class="note">
+    默认状态（未建任何分组）下，界面与行为<b>与无分组时完全一致</b>——所有内容在一个扁平列表中。分组是<b>可选启用</b>的，不破坏现有体验。
+  </div>
+  <div class="flow">
+    <div class="step"><span class="n">1</span><b>建分组</b><span>点顶部「+分组」命名。新建即自动成为活动分组（●标记）</span></div>
+    <div class="step"><span class="n">2</span><b>归类收集</b><span>复制文档A内容→归入分组A；切到分组B后再复制→自动归入分组B</span></div>
+    <div class="step"><span class="n">3</span><b>同屏浏览</b><span>所有分组同时可见，各带可折叠头(▶/▼)与项数。未分组项置顶显示</span></div>
+    <div class="step"><span class="n">4</span><b>按序输出</b><span>开模式后 <kbd>Ctrl+V</kbd> <b>全局 FIFO</b> 跨所有分组按复制时间先后输出，直至清空</span></div>
+  </div>
+  <table>
+    <tr><td>分组作用范围</td><td>仅普通队列。置顶区独立于分组，不归属任何分组</td></tr>
+    <tr><td>出队顺序</td><td>全局 FIFO——跨所有分组+未分组按复制时间取最早，<b>不</b>受当前活动分组影响。活动分组只决定"新复制归到哪"</td></tr>
+    <tr><td>删除分组</td><td>组内项自动移至"未分组"，不会被删除；删除活动分组后活动组重置为未分组</td></tr>
+    <tr><td>持久化</td><td>不持久化。分组及内容仅本次运行有效，退出即清空（与队列行为一致）</td></tr>
+  </table>
+
+  <h2>运行与启动</h2>
+  <table>
+    <tr><td>直接运行</td><td><code>src\MultiCopy\bin\Debug\net8.0-windows\MultiCopy.exe</code></td></tr>
+    <tr><td>从源码运行</td><td><code>dotnet run --project src\MultiCopy</code></td></tr>
+    <tr><td>开机自启</td><td>托盘右键 →「开机自启」勾选（写注册表 HKCU Run 项，无需管理员）</td></tr>
+    <tr><td>单实例</td><td>已运行时再次启动会自动退出，不会多开</td></tr>
+  </table>
+
+  <h2>已知限制</h2>
+  <ul class="limit">
+    <li><b>右键粘贴</b>不走键盘钩子，不会触发出队——请用 <kbd>Ctrl+V</kbd>。</li>
+    <li><b>UAC 不对称</b>：若目标应用以管理员权限运行而 MultiCopy 不是，钩子收不到其按键。需对管理员应用操作时，请以管理员身份运行 MultiCopy（修改 <code>app.manifest</code> 为 <code>requireAdministrator</code>）。</li>
+    <li>控制台/部分游戏等非标准粘贴应用可能不响应模拟 <kbd>Ctrl+V</kbd>。</li>
+    <li>仅采集纯文本（富文本/HTML/图片自动转为纯文本）。</li>
+  </ul>
+
+  <h2>项目结构</h2>
+  <table>
+    <tr><td><code>Native/</code></td><td>Win32 P/Invoke：键盘钩子、剪贴板监听、SendInput、窗口样式</td></tr>
+    <tr><td><code>Models/</code></td><td>ClipboardItem、ClipboardGroup（分组）、ClipboardQueue（未分组+分组+置顶，全局FIFO出队）</td></tr>
+    <tr><td><code>State/AppState.cs</code></td><td>全局标志位：模式开关、活动分组、防回环、防重入</td></tr>
+    <tr><td><code>Services/</code></td><td>剪贴板服务、监听器、键盘钩子、粘贴执行器、托盘</td></tr>
+    <tr><td><code>ViewModels/</code> · <code>MainWindow.xaml</code></td><td>MVVM 视图模型与置顶列表 UI</td></tr>
+  </table>
+
+  <div class="footer">
+    MultiCopy v1.2 · C# WPF .NET 8 · 含内容分组+暗亮双主题+内联线性图标 · 技术方案详见 <code>.workbuddy/plans/</code>
+  </div>
+
+</div>
+</body>
+</html>

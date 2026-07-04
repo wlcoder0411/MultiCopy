@@ -1,0 +1,64 @@
+<Window x:Class="MultiCopy.Views.SettingsDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="设置"
+        Width="360" Height="260"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False"
+        Background="{DynamicResource BackgroundBrush}"
+        Foreground="{DynamicResource ForegroundBrush}">
+    <Grid Margin="16,14">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- 启用开关 -->
+        <CheckBox Grid.Row="0" x:Name="EnableCheckBox"
+                  Content="启用全局快捷键（调出主窗口）"
+                  FontSize="{StaticResource FontSizeBody}"
+                  Foreground="{DynamicResource ForegroundBrush}"
+                  Margin="0,0,0,12"
+                  Checked="Enable_Changed" Unchecked="Enable_Changed" />
+
+        <!-- 捕获区标签 -->
+        <TextBlock Grid.Row="1" Margin="0,0,0,4"
+                   FontSize="{StaticResource FontSizeCaption}"
+                   Foreground="{DynamicResource ForegroundDimBrush}"
+                   Text="快捷键组合：" />
+
+        <!-- 捕获 TextBox（按下组合键即记录） -->
+        <Border Grid.Row="2" Style="{StaticResource SearchBorder}" Margin="0,0,0,4">
+            <TextBox x:Name="CaptureBox"
+                     Style="{StaticResource SearchTextBoxStyle}"
+                     IsReadOnly="True"
+                     Focusable="True"
+                     Padding="8,6"
+                     Tag="点击此处后按下组合键…"
+                     PreviewKeyDown="CaptureBox_PreviewKeyDown"
+                     GotFocus="CaptureBox_GotFocus" />
+        </Border>
+
+        <!-- 提示文字 -->
+        <TextBlock Grid.Row="3" x:Name="HintBlock"
+                   FontSize="{StaticResource FontSizeCaption}"
+                   Foreground="{DynamicResource ForegroundDimBrush}"
+                   Text="需至少一个修饰键（Alt/Ctrl/Shift/Win）+ 一个主键"
+                   TextWrapping="Wrap" />
+
+        <!-- 按钮区 -->
+        <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
+            <Button x:Name="ApplyButton" Style="{StaticResource SecondaryButton}"
+                    Content="应用" Margin="0,0,8,0" Click="Apply_Click" />
+            <Button x:Name="OkButton" Style="{StaticResource PrimaryButton}"
+                    Content="确定" Margin="0,0,8,0" IsDefault="True" Click="Ok_Click" />
+            <Button Style="{StaticResource SecondaryButton}"
+                    Content="取消" IsCancel="True" Click="Cancel_Click" />
+        </StackPanel>
+    </Grid>
+</Window>

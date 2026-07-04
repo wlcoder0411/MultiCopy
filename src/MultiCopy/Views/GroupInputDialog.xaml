@@ -1,0 +1,39 @@
+<Window x:Class="MultiCopy.Views.GroupInputDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="分组命名"
+        Width="340" Height="160"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False"
+        Background="{DynamicResource BackgroundBrush}"
+        Foreground="{DynamicResource ForegroundBrush}">
+    <Grid Margin="16,14">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" Margin="0,0,0,6" FontSize="{StaticResource FontSizeCaption}"
+                   Foreground="{DynamicResource ForegroundDimBrush}"
+                   Text="{Binding Prompt, Mode=OneWay}" />
+
+        <TextBox Grid.Row="1" x:Name="InputBox" Margin="0,0,0,8"
+                 FontSize="{StaticResource FontSizeTitle}" Padding="8,6"
+                 Background="{DynamicResource CardBackgroundBrush}"
+                 Foreground="{DynamicResource ForegroundBrush}"
+                 BorderBrush="{DynamicResource BorderBrush}"
+                 KeyDown="InputBox_KeyDown"
+                 TextChanged="InputBox_TextChanged" />
+
+        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button x:Name="OkButton" Style="{StaticResource PrimaryButton}"
+                    Content="确定" Margin="0,0,8,0" IsDefault="True"
+                    IsEnabled="False" Click="Ok_Click" />
+            <Button Style="{StaticResource SecondaryButton}"
+                    Content="取消" IsCancel="True" />
+        </StackPanel>
+    </Grid>
+</Window>

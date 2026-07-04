@@ -1,0 +1,53 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- ============ 内联 Path 图标 Geometry（24x24 viewBox，Lucide 数据） ============
+         用 <Path Style="{StaticResource IconStyle}" Data="{StaticResource IconXxx}"/> 引用。
+         线性图标：StrokeThickness 1.5，线帽/连接 Round；实心图标改 Fill。 -->
+
+    <!-- 列表（标题前缀，替 📋） -->
+    <Geometry x:Key="IconList">M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01</Geometry>
+
+    <!-- 图钉（置顶按钮，普通项） -->
+    <Geometry x:Key="IconPin">M12 17v5M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z</Geometry>
+
+    <!-- 删除 ✕ -->
+    <Geometry x:Key="IconClose">M18 6 6 18M6 6l12 12</Geometry>
+
+    <!-- 新建分组 ＋ -->
+    <Geometry x:Key="IconPlus">M5 12h14M12 5v14</Geometry>
+
+    <!-- 清空（垃圾桶） -->
+    <Geometry x:Key="IconTrash">M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6</Geometry>
+
+    <!-- 折叠箭头 ▶（右指） -->
+    <Geometry x:Key="IconChevronRight">m9 18 6-6-6-6</Geometry>
+
+    <!-- 展开箭头 ▼（下指） -->
+    <Geometry x:Key="IconChevronDown">m6 9 6 6 6-6</Geometry>
+
+    <!-- 太阳（主题按钮，亮色态显示） -->
+    <Geometry x:Key="IconSun">M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10zM12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42</Geometry>
+
+    <!-- 月亮（主题按钮，暗色态显示） -->
+    <Geometry x:Key="IconMoon">M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9z</Geometry>
+
+    <!-- 空状态收件箱（替 🗒️） -->
+    <Geometry x:Key="IconInbox">M22 12h-6l-2 3h-4l-2-3H2M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z</Geometry>
+
+    <!-- 搜索（放大镜） -->
+    <Geometry x:Key="IconSearch">M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.35-4.35</Geometry>
+
+    <!-- 爱心（标题栏图标） -->
+    <Geometry x:Key="IconHeart">M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z</Geometry>
+
+    <!-- 眼睛（监控开，睁眼） -->
+    <Geometry x:Key="IconEye">M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z</Geometry>
+
+    <!-- 眼睛关闭（监控关，闭眼+划线） -->
+    <Geometry x:Key="IconEyeOff">M9.88 9.88a3 3 0 1 0 4.24 4.24M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61M2 2l20 20</Geometry>
+
+    <!-- 设置（齿轮） -->
+    <Geometry x:Key="IconSettings">M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z M9 12a3 3 0 1 0 6 0a3 3 0 1 0 -6 0</Geometry>
+
+</ResourceDictionary>

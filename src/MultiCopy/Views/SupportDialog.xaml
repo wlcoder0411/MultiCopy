@@ -1,0 +1,42 @@
+<Window x:Class="MultiCopy.Views.SupportDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="支持作者"
+        Width="320" Height="420"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False"
+        Background="{DynamicResource BackgroundBrush}"
+        Foreground="{DynamicResource ForegroundBrush}">
+    <Grid Margin="20,16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- 主文案 -->
+        <TextBlock Grid.Row="0" HorizontalAlignment="Center" TextAlignment="Center"
+                   FontSize="{StaticResource FontSizeBody}" FontWeight="SemiBold"
+                   Foreground="{DynamicResource AccentBrush}" TextWrapping="Wrap"
+                   Text="若工具好用，可随缘请作者喝杯水哦~" />
+
+        <!-- 收款码 -->
+        <Image Grid.Row="1" Width="200" Height="200" Margin="0,16,0,0"
+               HorizontalAlignment="Center"
+               Source="pack://application:,,,/Assets/收款码.jpg" />
+
+        <!-- 补充文案 -->
+        <TextBlock Grid.Row="2" HorizontalAlignment="Center" TextAlignment="Center"
+                   Margin="0,12,0,0"
+                   FontSize="{StaticResource FontSizeCaption}"
+                   Foreground="{DynamicResource ForegroundDimBrush}" TextWrapping="Wrap"
+                   Text="每一份支持，都会让这个小工具变得更好用" />
+
+        <!-- 关闭按钮 -->
+        <Button Grid.Row="4" Style="{StaticResource PrimaryButton}"
+                Content="关闭" IsCancel="True" HorizontalAlignment="Center" />
+    </Grid>
+</Window>

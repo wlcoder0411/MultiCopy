@@ -1,0 +1,13 @@
+# 默认：让 git 自动识别文本/二进制，仓库内统一 LF
+* text=auto
+
+# 二进制资源（禁止换行符转换）
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.bmp  binary
+*.ttf  binary
+*.woff binary
+*.woff2 binary

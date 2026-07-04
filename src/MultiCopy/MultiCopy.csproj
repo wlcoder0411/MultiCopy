@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>MultiCopy</RootNamespace>
+    <AssemblyName>MultiCopy</AssemblyName>
+    <Version>3.6</Version>
+    <Company>MultiCopy</Company>
+    <Product>MultiCopy</Product>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
+    <!-- 禁用 NuGet 漏洞审计：避免每次构建访问 nuget.org 超时拖慢编译 -->
+    <NuGetAudit>false</NuGetAudit>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.3.2" />
+    <PackageReference Include="Hardcodet.NotifyIcon.Wpf" Version="1.1.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\app.ico" />
+    <Resource Include="Assets\tray-on.ico" />
+    <Resource Include="Assets\tray-off.ico" />
+    <Resource Include="Assets\收款码.jpg" />
+  </ItemGroup>
+
+</Project>
