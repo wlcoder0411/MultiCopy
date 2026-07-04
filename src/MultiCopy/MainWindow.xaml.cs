@@ -240,12 +240,22 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// 点列表项粘贴前调用：把焦点还给搜索框获焦前的目标应用，让 SendInput Ctrl+V 到达目标。
-    /// 仅在搜索框曾获焦过时生效（_targetHwndBeforeSearch 非空）。
+    /// 点列表项粘贴前调用：把焦点还给目标应用，让 SendInput Ctrl+V 到达目标。
+    /// 目标窗口选择优先级：当前前台窗口（用户调出 MultiCopy 后可能切换了目标）> _targetHwndBeforeSearch（调出时记录的）。
+    /// 这样用户在调出 MultiCopy 后切换到网页粘贴时，不会误把焦点切回复制源软件。
     /// 调用后强制重置 _searchActive，确保下次搜索框 GotFocus 重新记录目标。
     /// </summary>
     private void RestoreTargetFocusBeforePaste()
     {
+        IntPtr hwnd = new WindowInteropHelper(this).Handle;
+        // 优先使用当前前台窗口：用户调出 MultiCopy 后可能切换了粘贴目标（如切到网页对话框）。
+        // 若仍用 _targetHwndBeforeSearch（记录的是调出 MultiCopy 时的前台窗口），会把焦点误切回复制源软件。
+        IntPtr currentFg = Win32.GetForegroundWindow();
+        if (currentFg != IntPtr.Zero && currentFg != hwnd)
+        {
+            _targetHwndBeforeSearch = currentFg;
+        }
+
         if (_targetHwndBeforeSearch == IntPtr.Zero)
         {
             _searchActive = false; // 兜底：确保状态一致
@@ -253,7 +263,6 @@ public partial class MainWindow : Window
         }
         try
         {
-            IntPtr hwnd = new WindowInteropHelper(this).Handle;
             if (_targetHwndBeforeSearch == hwnd)
             {
                 _targetHwndBeforeSearch = IntPtr.Zero;

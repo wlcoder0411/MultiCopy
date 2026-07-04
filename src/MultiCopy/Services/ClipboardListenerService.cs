@@ -19,7 +19,7 @@ public sealed class ClipboardListenerService
     private readonly AppState _state = AppState.Instance;
     private IntPtr _hwnd;
 
-    // 重复写入抑制：同一文本在 500ms 内只入队一次（某些应用一次 Ctrl+C 触发多次 WM_CLIPBOARDUPDATE）
+    // 重复写入抑制：同一文本在 1500ms 内只入队一次（某些应用一次 Ctrl+C 触发多次 WM_CLIPBOARDUPDATE）
     private string? _lastEnqueuedText;
     private long _lastEnqueuedTicks;
 
@@ -32,7 +32,7 @@ public sealed class ClipboardListenerService
     // 复用 StringBuilder 抓取前台窗口标题，避免每次剪贴板变化都分配
     private readonly StringBuilder _titleBuffer = new(256);
 
-    private const int DedupWindowMs = 500;
+    private const int DedupWindowMs = 1500;
     private const int ImageDedupWindowMs = 1500;
     private const int MaxItemLength = 100_000; // 单条上限，防超大文本拖慢
     private const int MaxImageDimension = 4096; // 单边像素上限，防超大图片拖慢
