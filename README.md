@@ -86,7 +86,7 @@ MultiCopy 解决一个常见痛点：整理资料、填写表单、收集素材�
 ### 编译运行
 
 ```powershell
-git clone https://github.com/lwenlongcoder/MultiCopy.git
+git clone https://github.com/wlcoder0411/MultiCopy.git
 cd MultiCopy
 dotnet build src\MultiCopy\MultiCopy.csproj
 dotnet run --project src\MultiCopy\MultiCopy.csproj
