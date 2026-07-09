@@ -32,6 +32,25 @@ public partial class MainWindow : Window
         StateChanged += MainWindow_StateChanged;
         // Esc 键清空搜索框
         PreviewKeyDown += MainWindow_PreviewKeyDown;
+        // 窗口失活（用户切到其他窗口）时恢复 NOACTIVATE 并更新目标窗口。
+        // 解决 SearchBox_LostFocus 在窗口失活时不触发的问题：调出 MultiCopy 后移除了 NOACTIVATE，
+        // 若用户切换到其他窗口而 LostFocus 未触发，NOACTIVATE 不会恢复，点击列表项时 MultiCopy
+        // 会抢占前台，导致 GetForegroundWindow() 返回自身、无法识别用户实际切换的目标窗口。
+        Deactivated += (_, _) =>
+        {
+            if (_searchActive)
+            {
+                // Deactivated 触发时新前台窗口已就绪，记录为粘贴目标
+                IntPtr newFg = Win32.GetForegroundWindow();
+                IntPtr hwnd = new WindowInteropHelper(this).Handle;
+                if (newFg != IntPtr.Zero && newFg != hwnd)
+                {
+                    _targetHwndBeforeSearch = newFg;
+                }
+                _searchActive = false;
+                ApplyNoActivate();
+            }
+        };
         // 窗口可见性联动监控开关：隐藏至托盘→关监控，恢复显示→开监控
         // 覆盖所有入口（最小化按钮/关闭按钮/托盘菜单/快捷键），无需逐处替换 Hide()
         IsVisibleChanged += (_, _) =>
