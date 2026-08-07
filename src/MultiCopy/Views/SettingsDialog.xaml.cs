@@ -1,8 +1,10 @@
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 using MultiCopy.Infrastructure;
 using MultiCopy.Native;
 using MultiCopy.Services;
+using MultiCopy.State;
 
 namespace MultiCopy.Views;
 
@@ -27,6 +29,10 @@ public partial class SettingsDialog : Window
     private HotkeyModifierKeys _appliedMods;
     private int _appliedKey;
 
+    // 当前编辑中的前后缀内容
+    private string _currentPrefix = string.Empty;
+    private string _currentSuffix = string.Empty;
+
     private SettingsDialog(HotkeyService hotkey)
     {
         _hotkey = hotkey;
@@ -44,8 +50,63 @@ public partial class SettingsDialog : Window
         if (_original.HotkeyEnabled)
             CaptureBox.Text = HotkeyFormatter.Format(_capturedMods, _capturedKey);
 
+        // 初始化前后缀内容和启用状态
+        var state = MultiCopy.State.AppState.Instance;
+        _currentPrefix = state.PastePrefix ?? string.Empty;
+        _currentSuffix = state.PasteSuffix ?? string.Empty;
+        EnablePrefixCheckBox.IsChecked = state.IsPastePrefixEnabled;
+        EnableSuffixCheckBox.IsChecked = state.IsPasteSuffixEnabled;
+        UpdatePrefixSummary();
+        UpdateSuffixSummary();
+
+        // 初始化序号自增配置
+        EnableSequenceCheckBox.IsChecked = state.IsPrefixSequenceEnabled;
+        SequenceStartTextBox.Text = state.PrefixSequenceStart.ToString();
+        SequenceFormatCombo.SelectedIndex = (int)state.PrefixSequenceFormat;
+        SequencePositionCombo.SelectedIndex = (int)state.PrefixSequencePosition;
+
         UpdateCaptureEnabled();
         Loaded += (_, _) => { if (EnableCheckBox.IsChecked == true) CaptureBox.Focus(); };
+    }
+
+    /// <summary>更新前缀摘要框显示：空时显示提示，非空时把换行显示为 ↵。</summary>
+    private void UpdatePrefixSummary()
+    {
+        string display = string.IsNullOrEmpty(_currentPrefix)
+            ? "点击此处编辑前缀内容…"
+            : _currentPrefix.Replace("\r\n", "↵ ").Replace("\n", "↵ ");
+        PrefixSummaryTextBox.Text = display;
+    }
+
+    /// <summary>更新后缀摘要框显示：空时显示提示，非空时把换行显示为 ↵。</summary>
+    private void UpdateSuffixSummary()
+    {
+        string display = string.IsNullOrEmpty(_currentSuffix)
+            ? "点击此处编辑后缀内容…"
+            : _currentSuffix.Replace("\r\n", "↵ ").Replace("\n", "↵ ");
+        SuffixSummaryTextBox.Text = display;
+    }
+
+    /// <summary>点击前缀摘要框：弹出多行编辑对话框。</summary>
+    private void PrefixSummaryBorder_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        string? result = EditPasteSuffixDialog.Show(this, "编辑前缀内容", _currentPrefix);
+        if (result != null)
+        {
+            _currentPrefix = result;
+            UpdatePrefixSummary();
+        }
+    }
+
+    /// <summary>点击后缀摘要框：弹出多行编辑对话框。</summary>
+    private void SuffixSummaryBorder_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        string? result = EditPasteSuffixDialog.Show(this, "编辑后缀内容", _currentSuffix);
+        if (result != null)
+        {
+            _currentSuffix = result;
+            UpdateSuffixSummary();
+        }
     }
 
     /// <summary>弹出设置对话框。返回 true=有改动并已应用。</summary>
@@ -74,8 +135,29 @@ public partial class SettingsDialog : Window
     {
         bool en = EnableCheckBox.IsChecked == true;
         CaptureBox.IsEnabled = en;
-        ApplyButton.IsEnabled = en;
         OkButton.IsEnabled = en;
+    }
+
+    // ---------- 序号输入限制 ----------
+    /// <summary>限制起始序号只能输入正整数。</summary>
+    private void SequenceStartTextBox_PreviewTextInput(object sender, TextCompositionEventArgs e)
+    {
+        e.Handled = !int.TryParse(e.Text, out int v) || v < 0;
+    }
+
+    /// <summary>限制粘贴操作只能粘贴数字。</summary>
+    private void SequenceStartTextBox_Pasting(object sender, DataObjectPastingEventArgs e)
+    {
+        if (e.DataObject.GetDataPresent(DataFormats.Text))
+        {
+            string text = (string)e.DataObject.GetData(DataFormats.Text);
+            if (!int.TryParse(text, out _))
+                e.CancelCommand();
+        }
+        else
+        {
+            e.CancelCommand();
+        }
     }
 
     // ---------- 按键捕获 ----------
@@ -127,8 +209,6 @@ public partial class SettingsDialog : Window
     }
 
     // ---------- 按钮 ----------
-    private void Apply_Click(object sender, RoutedEventArgs e) => DoApply();
-
     private void Ok_Click(object sender, RoutedEventArgs e)
     {
         if (DoApply()) DialogResult = true;
@@ -172,6 +252,86 @@ public partial class SettingsDialog : Window
         _appliedMods = _capturedMods;
         _appliedKey = _capturedKey;
         HintBlock.Text = "已生效" + (enabled ? $"（{HotkeyFormatter.Format(_capturedMods, _capturedKey)}）" : "（已禁用）");
+
+
+        // 保存粘贴前后缀设置（独立于快捷键保存逻辑，立即生效并持久化）
+        string prefix = _currentPrefix;
+        string suffix = _currentSuffix;
+        bool prefixEnabled = EnablePrefixCheckBox.IsChecked == true;
+        bool suffixEnabled = EnableSuffixCheckBox.IsChecked == true;
+        bool sequenceEnabled = EnableSequenceCheckBox.IsChecked == true;
+        // 起始序号校验：解析失败或 <1 时回退到 1
+        int sequenceStart = int.TryParse(SequenceStartTextBox.Text, out int parsed) && parsed >= 1 ? parsed : 1;
+        var seqFormat = (PrefixSequenceFormat)SequenceFormatCombo.SelectedIndex;
+        var seqPosition = (PrefixSequencePosition)SequencePositionCombo.SelectedIndex;
+
+        var currentSettings = SettingsStorageService.Load();
+        bool settingsChanged = false;
+        if (currentSettings.PastePrefix != prefix)
+        {
+            currentSettings.PastePrefix = prefix;
+            settingsChanged = true;
+        }
+        if (currentSettings.PasteSuffix != suffix)
+        {
+            currentSettings.PasteSuffix = suffix;
+            settingsChanged = true;
+        }
+        if (currentSettings.IsPastePrefixEnabled != prefixEnabled)
+        {
+            currentSettings.IsPastePrefixEnabled = prefixEnabled;
+            settingsChanged = true;
+        }
+        if (currentSettings.IsPasteSuffixEnabled != suffixEnabled)
+        {
+            currentSettings.IsPasteSuffixEnabled = suffixEnabled;
+            settingsChanged = true;
+        }
+        if (currentSettings.IsPrefixSequenceEnabled != sequenceEnabled)
+        {
+            currentSettings.IsPrefixSequenceEnabled = sequenceEnabled;
+            settingsChanged = true;
+        }
+        if (currentSettings.PrefixSequenceStart != sequenceStart)
+        {
+            currentSettings.PrefixSequenceStart = sequenceStart;
+            // 起始序号变更时，当前序号也重置到新起始值
+            currentSettings.PrefixSequenceCurrent = sequenceStart;
+            settingsChanged = true;
+        }
+        if (currentSettings.PrefixSequenceFormat != seqFormat)
+        {
+            currentSettings.PrefixSequenceFormat = seqFormat;
+            settingsChanged = true;
+        }
+        if (currentSettings.PrefixSequencePosition != seqPosition)
+        {
+            currentSettings.PrefixSequencePosition = seqPosition;
+            settingsChanged = true;
+        }
+        // 当前序号值可能已因粘贴递增，始终写回最新值
+        if (currentSettings.PrefixSequenceCurrent != MultiCopy.State.AppState.Instance.PrefixSequenceCurrent)
+        {
+            currentSettings.PrefixSequenceCurrent = MultiCopy.State.AppState.Instance.PrefixSequenceCurrent;
+            settingsChanged = true;
+        }
+        if (settingsChanged)
+        {
+            SettingsStorageService.Save(currentSettings);
+        }
+
+        var state = MultiCopy.State.AppState.Instance;
+        state.PastePrefix = prefix;
+        state.PasteSuffix = suffix;
+        state.IsPastePrefixEnabled = prefixEnabled;
+        state.IsPasteSuffixEnabled = suffixEnabled;
+        state.IsPrefixSequenceEnabled = sequenceEnabled;
+        state.PrefixSequenceStart = sequenceStart;
+        state.PrefixSequenceFormat = seqFormat;
+        state.PrefixSequencePosition = seqPosition;
+        // 起始序号变更时同步重置当前序号
+        if (state.PrefixSequenceCurrent < sequenceStart)
+            state.PrefixSequenceCurrent = sequenceStart;
         return true;
     }
 }

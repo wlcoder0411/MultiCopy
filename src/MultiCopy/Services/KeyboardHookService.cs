@@ -67,7 +67,9 @@ public sealed class KeyboardHookService : IDisposable
                     switch (head)
                     {
                         case TextClipboardItem textItem:
-                            writeOk = _clipboard.SetClipboardTextSync(textItem.Text);
+                            // 追加前后缀内容和序号（通过 AppState.BuildPasteText 统一拼接，图片项不追加）
+                            string textToPaste = _state.BuildPasteText(textItem.Text);
+                            writeOk = _clipboard.SetClipboardTextSync(textToPaste);
                             break;
                         case ImageClipboardItem imgItem:
                             writeOk = _clipboard.SetClipboardImageSync(imgItem.Image);

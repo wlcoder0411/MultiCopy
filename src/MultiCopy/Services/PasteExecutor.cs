@@ -28,7 +28,9 @@ public sealed class PasteExecutor
             case TextClipboardItem textItem:
                 // 文本为空直接返回（目标应用会粘贴当前剪贴板，降级为普通粘贴）
                 if (string.IsNullOrEmpty(textItem.Text)) return;
-                writeOk = _clipboard.SetClipboardTextSync(textItem.Text);
+                // 追加前后缀内容和序号（通过 AppState.BuildPasteText 统一拼接，图片项不追加）
+                string textToPaste = _state.BuildPasteText(textItem.Text);
+                writeOk = _clipboard.SetClipboardTextSync(textToPaste);
                 // 文本写失败：直接返回（目标应用粘贴当前剪贴板，降级为普通粘贴）
                 if (!writeOk) return;
                 break;

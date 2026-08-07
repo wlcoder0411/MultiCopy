@@ -265,6 +265,103 @@
             </DataTemplate.Triggers>
         </DataTemplate>
 
+        <!-- 置顶分组内的文本项：双击粘贴并保留（与 PinnedItemTemplate 对称，但只保留"删除"按钮，
+             无"取消置顶"——取消置顶是组级操作，通过分组右键菜单"取消置顶"实现。
+             "删除"调用 DeleteNormalCommand：RemoveNormal 跨所有 Groups.Items 查找移除，包括置顶分组） -->
+        <DataTemplate x:Key="PinnedGroupItemTemplate" DataType="{x:Type models:ClipboardItem}">
+            <Border x:Name="card" Margin="8,3" Padding="8,6"
+                    Background="{DynamicResource PinBackgroundBrush}" CornerRadius="6"
+                    BorderBrush="{DynamicResource PinBrush}" BorderThickness="2,0,0,0"
+                    Cursor="Hand"
+                    MouseLeftButtonDown="PinnedItem_DoubleClick">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="24" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock Grid.Column="0" VerticalAlignment="Center"
+                               Foreground="{DynamicResource PinBrush}"
+                               FontSize="{StaticResource FontSizeCaption}"
+                               Text="{Binding (ItemsControl.AlternationIndex),
+                                      RelativeSource={RelativeSource AncestorType=ContentPresenter},
+                                      Converter={StaticResource IdxConv}}" />
+
+                    <TextBlock Grid.Column="1" VerticalAlignment="Center" Margin="4,0,8,0"
+                               Text="{Binding Preview}" ToolTip="双击粘贴（保留）"
+                               TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" />
+
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button Style="{StaticResource GhostButton}" ToolTip="删除"
+                                Command="{Binding DataContext.DeleteNormalCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                CommandParameter="{Binding}">
+                            <Path Style="{StaticResource IconStyle}" Data="{StaticResource IconClose}"/>
+                        </Button>
+                    </StackPanel>
+                </Grid>
+            </Border>
+            <DataTemplate.Triggers>
+                <Trigger SourceName="card" Property="IsMouseOver" Value="True">
+                    <Setter TargetName="card" Property="Background" Value="{DynamicResource PinBackgroundHoverBrush}" />
+                </Trigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+
+        <!-- 置顶分组内的图片项：双击粘贴并保留（与 ImagePinnedItemTemplate 对称，但只保留"删除"按钮） -->
+        <DataTemplate x:Key="ImagePinnedGroupItemTemplate" DataType="{x:Type models:ImageClipboardItem}">
+            <Border x:Name="card" Margin="8,3" Padding="8,6"
+                    Background="{DynamicResource PinBackgroundBrush}" CornerRadius="6"
+                    BorderBrush="{DynamicResource PinBrush}" BorderThickness="2,0,0,0"
+                    Cursor="Hand"
+                    MouseLeftButtonDown="PinnedItem_DoubleClick">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="24" />
+                        <ColumnDefinition Width="104" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock Grid.Column="0" VerticalAlignment="Center"
+                               Foreground="{DynamicResource PinBrush}"
+                               FontSize="{StaticResource FontSizeCaption}"
+                               Text="{Binding (ItemsControl.AlternationIndex),
+                                      RelativeSource={RelativeSource AncestorType=ContentPresenter},
+                                      Converter={StaticResource IdxConv}}" />
+
+                    <Border Grid.Column="1" Width="96" Height="96" Margin="4,0"
+                            Background="{DynamicResource ThumbnailBackgroundBrush}"
+                            CornerRadius="4" HorizontalAlignment="Left" VerticalAlignment="Center">
+                        <Image Source="{Binding Thumbnail}" Stretch="UniformToFill" Width="96" Height="96"/>
+                    </Border>
+
+                    <StackPanel Grid.Column="2" VerticalAlignment="Center" Margin="8,0,8,0"
+                                ToolTip="双击粘贴（保留）">
+                        <TextBlock Text="{Binding Preview}" FontWeight="Medium"
+                                   TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/>
+                        <TextBlock Text="{Binding SourceApp}" Margin="0,2,0,0"
+                                   FontSize="{StaticResource FontSizeCaption}"
+                                   Foreground="{DynamicResource ForegroundDimBrush}"
+                                   TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/>
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button Style="{StaticResource GhostButton}" ToolTip="删除"
+                                Command="{Binding DataContext.DeleteNormalCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                CommandParameter="{Binding}">
+                            <Path Style="{StaticResource IconStyle}" Data="{StaticResource IconClose}"/>
+                        </Button>
+                    </StackPanel>
+                </Grid>
+            </Border>
+            <DataTemplate.Triggers>
+                <Trigger SourceName="card" Property="IsMouseOver" Value="True">
+                    <Setter TargetName="card" Property="Background" Value="{DynamicResource PinBackgroundHoverBrush}" />
+                </Trigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+
         <!-- 分组模板（QQ 风格：分组头 + 可折叠组内项） -->
         <DataTemplate x:Key="GroupTemplate" DataType="{x:Type models:ClipboardGroup}">
             <StackPanel Margin="0,2">
@@ -277,6 +374,7 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="20" />
                             <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
@@ -308,12 +406,35 @@
                                  VerticalAlignment="Center"
                                  Fill="{DynamicResource AccentBrush}"
                                  Visibility="{Binding IsActiveGroup, Converter={StaticResource Bool2Vis}}" />
+                        <!-- 置顶分组标记（图钉图标，IsPinned=true 时显示） -->
+                        <Path Grid.Column="4" Style="{StaticResource IconStyle}"
+                              Data="{StaticResource IconPin}" Width="13" Height="13" Margin="6,0,0,0"
+                              VerticalAlignment="Center"
+                              Stroke="{DynamicResource PinBrush}" Fill="{DynamicResource PinBrush}"
+                              Visibility="{Binding IsPinned, Converter={StaticResource Bool2Vis}}"/>
                     </Grid>
                     <Border.ContextMenu>
                         <ContextMenu>
-                            <MenuItem Header="设为活动分组"
-                                      Command="{Binding PlacementTarget.Tag.SetActiveGroupCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                                      CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                            <!-- 置顶（非置顶时显示） -->
+                            <MenuItem Header="置顶"
+                                      Command="{Binding PlacementTarget.Tag.PinGroupCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                      CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}">
+                                <MenuItem.Visibility>
+                                    <Binding Path="PlacementTarget.DataContext.IsPinned"
+                                             RelativeSource="{RelativeSource AncestorType=ContextMenu}"
+                                             Converter="{x:Static infra:InverseBoolToVisibilityConverter.Instance}"/>
+                                </MenuItem.Visibility>
+                            </MenuItem>
+                            <!-- 取消置顶（置顶时显示） -->
+                            <MenuItem Header="取消置顶"
+                                      Command="{Binding PlacementTarget.Tag.UnpinGroupCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                      CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}">
+                                <MenuItem.Visibility>
+                                    <Binding Path="PlacementTarget.DataContext.IsPinned"
+                                             RelativeSource="{RelativeSource AncestorType=ContextMenu}"
+                                             Converter="{StaticResource Bool2Vis}"/>
+                                </MenuItem.Visibility>
+                            </MenuItem>
                             <MenuItem Header="重命名"
                                       Command="{Binding PlacementTarget.Tag.RenameGroupCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                                       CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
@@ -327,14 +448,30 @@
                         </ContextMenu>
                     </Border.ContextMenu>
                 </Border>
-                <!-- 组内项（折叠时 Collapsed，无动画） -->
-                <ItemsControl ItemsSource="{Binding Items}" AlternationCount="1000"
+                <!-- 组内项：普通分组（单击粘贴并移除）。折叠时 Collapsed，无动画。 -->
+                <ItemsControl x:Name="normalGroupItems" ItemsSource="{Binding Items}" AlternationCount="1000"
                               ScrollViewer.CanContentScroll="True"
                               Visibility="{Binding IsExpanded, Converter={StaticResource Bool2Vis}}">
                     <ItemsControl.ItemTemplateSelector>
                         <infra:ClipboardItemTemplateSelector
                             TextTemplate="{StaticResource NormalItemTemplate}"
                             ImageTemplate="{StaticResource ImageNormalItemTemplate}"/>
+                    </ItemsControl.ItemTemplateSelector>
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <VirtualizingStackPanel VirtualizationMode="Recycling"/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                </ItemsControl>
+                <!-- 组内项：置顶分组（双击粘贴并保留）。Visibility 由 IsPinned 决定；
+                     折叠时由下方 DataTrigger 强制 Collapsed（覆盖 IsPinned 绑定）。 -->
+                <ItemsControl x:Name="pinnedGroupItems" ItemsSource="{Binding Items}" AlternationCount="1000"
+                              ScrollViewer.CanContentScroll="True"
+                              Visibility="{Binding IsPinned, Converter={StaticResource Bool2Vis}}">
+                    <ItemsControl.ItemTemplateSelector>
+                        <infra:ClipboardItemTemplateSelector
+                            TextTemplate="{StaticResource PinnedGroupItemTemplate}"
+                            ImageTemplate="{StaticResource ImagePinnedGroupItemTemplate}"/>
                     </ItemsControl.ItemTemplateSelector>
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
@@ -349,6 +486,20 @@
                     <Setter TargetName="header" Property="Background" Value="{DynamicResource AccentBackgroundBrush}" />
                     <Setter TargetName="header" Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
                     <Setter TargetName="header" Property="BorderThickness" Value="2,0,0,0" />
+                </DataTrigger>
+                <!-- 置顶分组头部视觉标识（PinBackgroundBrush + PinBrush 左边框，优先级高于活动分组）。
+                     同时隐藏 normalGroupItems：置顶分组的组内项只能走 pinnedGroupItems（双击粘贴并保留），
+                     若 normalGroupItems 仍可见会导致组内项被两套模板重复渲染，
+                     且普通模板的"单击粘贴并移除"会破坏置顶语义并丢失数据。 -->
+                <DataTrigger Binding="{Binding IsPinned}" Value="True">
+                    <Setter TargetName="header" Property="Background" Value="{DynamicResource PinBackgroundBrush}" />
+                    <Setter TargetName="header" Property="BorderBrush" Value="{DynamicResource PinBrush}" />
+                    <Setter TargetName="header" Property="BorderThickness" Value="2,0,0,0" />
+                    <Setter TargetName="normalGroupItems" Property="Visibility" Value="Collapsed"/>
+                </DataTrigger>
+                <!-- 折叠时隐藏置顶分组的组内项（覆盖 pinnedGroupItems 的 IsPinned 可见性绑定） -->
+                <DataTrigger Binding="{Binding IsExpanded}" Value="False">
+                    <Setter TargetName="pinnedGroupItems" Property="Visibility" Value="Collapsed"/>
                 </DataTrigger>
             </DataTemplate.Triggers>
         </DataTemplate>
@@ -406,6 +557,11 @@
                             </Path.Visibility>
                         </Path>
                     </Grid>
+                </Button>
+                <Button Style="{StaticResource GhostButton}" ToolTip="重置序号"
+                        Margin="0,0,4,0"
+                        Command="{Binding ResetSequenceCommand}">
+                    <Path Style="{StaticResource IconStyle}" Data="{StaticResource IconReset}"/>
                 </Button>
                 <Button Style="{StaticResource GhostButton}" ToolTip="设置"
                         Margin="0,0,4,0"

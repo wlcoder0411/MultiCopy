@@ -50,7 +50,6 @@ public static class PinnedStorageService
             if (dtos == null) return new List<ClipboardItem>();
 
             var items = new List<ClipboardItem>(dtos.Count);
-            var validImageFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             foreach (var dto in dtos)
             {
@@ -79,16 +78,13 @@ public static class PinnedStorageService
                             var imgItem = new ImageClipboardItem(bitmap, imgDto.SourceApp ?? string.Empty, imgDto.CreatedAt);
                             imgItem.IsPinned = true;
                             items.Add(imgItem);
-                            validImageFiles.Add(imgDto.ImageFile);
                         }
                         catch { continue; }
                         break;
                 }
             }
 
-            // 启动期清理孤儿图片文件（索引中引用但文件缺失的会在下次 Save 时被清出索引；
-            // 索引中未引用但磁盘上存在的孤儿图片在此清理）
-            CleanupOrphanImages(validImageFiles);
+            // 孤儿图片清理已移至 App.OnStartup 统一处理（联合 PinnedItems + Groups 的图片引用）
 
             return items;
         }
@@ -101,7 +97,7 @@ public static class PinnedStorageService
         }
     }
 
-    /// <summary>保存置顶项到磁盘。原子写入索引 + 同步管理图片文件 + 清理孤儿。</summary>
+    /// <summary>保存置顶项到磁盘。原子写入索引 + 同步管理图片文件（不清理孤儿，由 App 统一处理）。</summary>
     public static void Save(IEnumerable<ClipboardItem> pinnedItems)
     {
         try
@@ -110,7 +106,6 @@ public static class PinnedStorageService
             Directory.CreateDirectory(ImagesDir);
 
             var dtos = new List<PinnedItemDto>();
-            var usedImageFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             foreach (var item in pinnedItems)
             {
@@ -133,7 +128,6 @@ public static class PinnedStorageService
                         {
                             SaveImageToFile(imgItem.Image, imgPath);
                         }
-                        usedImageFiles.Add(imgFileName);
                         dtos.Add(new ImagePinnedItemDto
                         {
                             ImageFile = imgFileName,
@@ -154,8 +148,7 @@ public static class PinnedStorageService
             if (File.Exists(FilePath)) File.Replace(tempPath, FilePath, null);
             else File.Move(tempPath, FilePath);
 
-            // 清理孤儿图片文件（不在 usedImageFiles 中的）
-            CleanupOrphanImages(usedImageFiles);
+            // 孤儿图片清理已移至 App.OnStartup 统一处理（联合 PinnedItems + Groups 的图片引用）
         }
         catch (Exception ex)
         {
@@ -194,8 +187,14 @@ public static class PinnedStorageService
         else File.Move(tmp, path);
     }
 
-    /// <summary>清理孤儿图片文件：删除 images 目录下不在 usedImageFiles 中的 *.png。</summary>
-    private static void CleanupOrphanImages(HashSet<string> usedImageFiles)
+    /// <summary>图片文件目录（与 GroupStorageService 共享）。供 App 统一清理孤儿图片用。</summary>
+    internal static string ImagesDirectory => ImagesDir;
+
+    /// <summary>
+    /// 清理孤儿图片文件：删除 images 目录下不在 usedImageFiles 中的 *.png。
+    /// 供 App.OnStartup 统一调用（联合 PinnedItems + Groups 的图片引用，避免互相误删）。
+    /// </summary>
+    internal static void CleanupOrphanImages(HashSet<string> usedImageFiles)
     {
         try
         {

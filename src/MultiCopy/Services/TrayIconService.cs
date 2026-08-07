@@ -52,12 +52,16 @@ public sealed class TrayIconService : IDisposable
         _state.ModeChanged += OnModeChanged;
         _state.MonitoringChanged += OnMonitoringChanged;
         _state.QueueFullNotification += OnQueueFull;
-        _hotkey.SettingsChanged += OnHotkeySettingsChanged;
     }
 
     private ContextMenu BuildMenu()
     {
         var menu = new ContextMenu();
+        // 托盘菜单不在主窗口逻辑树内，显式应用 Application 级别的隐式样式，避免主题丢失
+        if (Application.Current != null)
+        {
+            menu.Style = (Style)Application.Current.FindResource(typeof(ContextMenu));
+        }
 
         var miShow = new MenuItem { Header = "显示/隐藏窗口(_S)" };
         miShow.Click += (_, _) => ToggleWindowVisibility();
@@ -89,8 +93,8 @@ public sealed class TrayIconService : IDisposable
 
         menu.Items.Add(new Separator());
 
-        // 设置（显示当前快捷键）
-        _miSettings = new MenuItem { Header = FormatSettingsMenuText() };
+        // 设置（简洁入口，具体配置在对话框中查看）
+        _miSettings = new MenuItem { Header = "设置(_T)" };
         _miSettings.Click += (_, _) => OpenSettings();
         menu.Items.Add(_miSettings);
 
@@ -99,33 +103,21 @@ public sealed class TrayIconService : IDisposable
         var miExit = new MenuItem { Header = "退出(_X)" };
         miExit.Click += (_, _) =>
         {
-            if (Application.Current is App app) app.ForceExit = true;
-            Application.Current.Shutdown();
+            if (Application.Current is App app)
+            {
+                app.ForceExit = true;
+                app.Shutdown();
+            }
         };
         menu.Items.Add(miExit);
 
         return menu;
     }
 
-    /// <summary>格式化设置菜单文本（含当前快捷键）。</summary>
-    private string FormatSettingsMenuText()
-    {
-        var s = _hotkey.CurrentSettings;
-        if (!s.HotkeyEnabled) return "设置(_T)";
-        return $"设置(_T)  {HotkeyFormatter.Format((HotkeyModifierKeys)s.Modifiers, s.Key)}";
-    }
-
     private void OpenSettings()
     {
         // 主窗口隐藏时对话框用 CenterScreen 定位
         SettingsDialog.Show(_window.IsVisible ? _window : null, _hotkey);
-        // 对话框关闭后刷新菜单文本（快捷键可能已改）
-        if (_miSettings != null) _miSettings.Header = FormatSettingsMenuText();
-    }
-
-    private void OnHotkeySettingsChanged(object? sender, SettingsStorageService.SettingsDto s)
-    {
-        if (_miSettings != null) _miSettings.Header = FormatSettingsMenuText();
     }
 
     private void OnModeChanged(object? sender, bool modeOn)
@@ -225,7 +217,6 @@ public sealed class TrayIconService : IDisposable
         _state.ModeChanged -= OnModeChanged;
         _state.MonitoringChanged -= OnMonitoringChanged;
         _state.QueueFullNotification -= OnQueueFull;
-        _hotkey.SettingsChanged -= OnHotkeySettingsChanged;
         _tray?.Dispose();
     }
 }

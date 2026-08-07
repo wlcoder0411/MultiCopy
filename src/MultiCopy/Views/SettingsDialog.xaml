@@ -2,7 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="设置"
-        Width="360" Height="260"
+        Width="420" Height="560"
         ResizeMode="NoResize"
         WindowStartupLocation="CenterOwner"
         ShowInTaskbar="False"
@@ -10,6 +10,14 @@
         Foreground="{DynamicResource ForegroundBrush}">
     <Grid Margin="16,14">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -51,10 +59,111 @@
                    Text="需至少一个修饰键（Alt/Ctrl/Shift/Win）+ 一个主键"
                    TextWrapping="Wrap" />
 
+        <!-- 分隔线 -->
+        <Border Grid.Row="4" BorderBrush="{DynamicResource ForegroundDimBrush}" BorderThickness="0,1,0,0" Margin="0,12,0,12" Opacity="0.3" />
+
+        <!-- 粘贴前后缀标签 -->
+        <TextBlock Grid.Row="5" Margin="0,0,0,8"
+                   FontSize="{StaticResource FontSizeCaption}"
+                   Foreground="{DynamicResource ForegroundDimBrush}"
+                   Text="粘贴前缀/后缀内容（每次粘贴自动追加，默认无）：" />
+
+        <!-- 前缀启用开关 -->
+        <CheckBox Grid.Row="6" x:Name="EnablePrefixCheckBox"
+                  Content="启用前缀"
+                  FontSize="{StaticResource FontSizeBody}"
+                  Foreground="{DynamicResource ForegroundBrush}"
+                  Margin="0,0,0,4" />
+
+        <!-- 前缀内容摘要框（点击弹出多行编辑） -->
+        <Border Grid.Row="7" Style="{StaticResource SearchBorder}" Cursor="Hand"
+                MouseLeftButtonDown="PrefixSummaryBorder_MouseLeftButtonDown">
+            <TextBox x:Name="PrefixSummaryTextBox"
+                     Style="{StaticResource SearchTextBoxStyle}"
+                     IsReadOnly="True"
+                     IsReadOnlyCaretVisible="False"
+                     Focusable="False"
+                     Text="点击此处编辑前缀内容…" />
+        </Border>
+
+        <!-- 序号自增配置区域 -->
+        <CheckBox Grid.Row="8" x:Name="EnableSequenceCheckBox"
+                  Content="启用序号自增"
+                  FontSize="{StaticResource FontSizeBody}"
+                  Foreground="{DynamicResource ForegroundBrush}"
+                  Margin="0,8,0,4" />
+
+        <Grid Grid.Row="9" Margin="0,0,0,4">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- 起始序号 -->
+            <TextBlock Grid.Column="0" Text="起始："
+                       FontSize="{StaticResource FontSizeCaption}"
+                       Foreground="{DynamicResource ForegroundDimBrush}"
+                       VerticalAlignment="Center" Margin="0,0,4,0" />
+            <Border Grid.Column="1" Style="{StaticResource SearchBorder}" Width="50" Margin="0,0,12,0">
+                <TextBox x:Name="SequenceStartTextBox"
+                         Style="{StaticResource SearchTextBoxStyle}"
+                         Padding="4,2"
+                         PreviewTextInput="SequenceStartTextBox_PreviewTextInput"
+                         DataObject.Pasting="SequenceStartTextBox_Pasting" />
+            </Border>
+
+            <!-- 序号格式 -->
+            <TextBlock Grid.Column="2" Text="格式："
+                       FontSize="{StaticResource FontSizeCaption}"
+                       Foreground="{DynamicResource ForegroundDimBrush}"
+                       VerticalAlignment="Center" Margin="0,0,4,0" />
+            <ComboBox Grid.Column="3" x:Name="SequenceFormatCombo"
+                      SelectedIndex="0" Margin="0,0,12,0"
+                      FontSize="{StaticResource FontSizeCaption}">
+                <ComboBoxItem Content="1" />
+                <ComboBoxItem Content="01" />
+                <ComboBoxItem Content="(1)" />
+                <ComboBoxItem Content="1." />
+                <ComboBoxItem Content="1、" />
+            </ComboBox>
+
+            <!-- 序号位置 -->
+            <TextBlock Grid.Column="4" Text="位置："
+                       FontSize="{StaticResource FontSizeCaption}"
+                       Foreground="{DynamicResource ForegroundDimBrush}"
+                       VerticalAlignment="Center" Margin="0,0,4,0" />
+            <ComboBox Grid.Column="5" x:Name="SequencePositionCombo"
+                      SelectedIndex="0"
+                      FontSize="{StaticResource FontSizeCaption}">
+                <ComboBoxItem Content="前缀后" />
+                <ComboBoxItem Content="前缀前" />
+            </ComboBox>
+        </Grid>
+
+        <!-- 后缀启用开关 -->
+        <CheckBox Grid.Row="10" x:Name="EnableSuffixCheckBox"
+                  Content="启用后缀"
+                  FontSize="{StaticResource FontSizeBody}"
+                  Foreground="{DynamicResource ForegroundBrush}"
+                  Margin="0,8,0,4" />
+
+        <!-- 后缀内容摘要框（点击弹出多行编辑） -->
+        <Border Grid.Row="11" Style="{StaticResource SearchBorder}" Cursor="Hand"
+                MouseLeftButtonDown="SuffixSummaryBorder_MouseLeftButtonDown">
+            <TextBox x:Name="SuffixSummaryTextBox"
+                     Style="{StaticResource SearchTextBoxStyle}"
+                     IsReadOnly="True"
+                     IsReadOnlyCaretVisible="False"
+                     Focusable="False"
+                     Text="点击此处编辑后缀内容…" />
+        </Border>
+
         <!-- 按钮区 -->
-        <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
-            <Button x:Name="ApplyButton" Style="{StaticResource SecondaryButton}"
-                    Content="应用" Margin="0,0,8,0" Click="Apply_Click" />
+        <StackPanel Grid.Row="13" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
             <Button x:Name="OkButton" Style="{StaticResource PrimaryButton}"
                     Content="确定" Margin="0,0,8,0" IsDefault="True" Click="Ok_Click" />
             <Button Style="{StaticResource SecondaryButton}"

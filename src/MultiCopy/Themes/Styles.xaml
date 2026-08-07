@@ -203,6 +203,7 @@
         <Setter Property="CaretBrush" Value="{DynamicResource AccentBrush}" />
         <Setter Property="FontSize" Value="{StaticResource FontSizeBody}" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="VerticalScrollBarVisibility" Value="Hidden" />
         <Setter Property="Padding" Value="0,2" />
         <Setter Property="Template">
             <Setter.Value>
@@ -211,15 +212,309 @@
                         <!-- Watermark 占位文字（Tag 传入，空文本时显示） -->
                         <TextBlock Text="{TemplateBinding Tag}"
                                    Foreground="{DynamicResource ForegroundDimBrush}"
-                                   VerticalAlignment="Center"
+                                   VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
                                    IsHitTestVisible="False"
                                    Visibility="{Binding Text, RelativeSource={RelativeSource TemplatedParent}, Converter={x:Static infra:StringToVisibilityConverter.Instance}}" />
                         <!-- 实际输入区 -->
                         <ScrollViewer x:Name="PART_ContentHost"
                                       Focusable="False"
                                       HorizontalScrollBarVisibility="Hidden"
-                                      VerticalScrollBarVisibility="Hidden" />
+                                      VerticalScrollBarVisibility="{TemplateBinding VerticalScrollBarVisibility}" />
                     </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ComboBox：完整模板，确保编辑区、下拉弹窗都适配主题，且无悬停异常覆盖 -->
+    <Style TargetType="ComboBox">
+        <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Padding" Value="8,6" />
+        <Setter Property="FontSize" Value="{StaticResource FontSizeBody}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ComboBox">
+                    <Grid x:Name="templateRoot" SnapsToDevicePixels="True">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" MinWidth="28" />
+                        </Grid.ColumnDefinitions>
+
+                        <!-- 主 Border（背景和边框，覆盖整行） -->
+                        <Border x:Name="bd" Grid.ColumnSpan="2"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="6" />
+
+                        <!-- 左侧：选中项显示 / 可编辑 TextBox -->
+                        <Border Grid.Column="0"
+                                Background="Transparent"
+                                Margin="{TemplateBinding Padding}"
+                                VerticalAlignment="Center">
+                            <Grid>
+                                <ContentPresenter x:Name="contentPresenter"
+                                                  Content="{TemplateBinding SelectionBoxItem}"
+                                                  ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                                  HorizontalAlignment="Left"
+                                                  VerticalAlignment="Center" />
+                                <TextBox x:Name="PART_EditableTextBox"
+                                         Background="Transparent"
+                                         BorderThickness="0"
+                                         Foreground="{TemplateBinding Foreground}"
+                                         CaretBrush="{DynamicResource ForegroundBrush}"
+                                         VerticalContentAlignment="Center"
+                                         Visibility="Collapsed" />
+                            </Grid>
+                        </Border>
+
+                        <!-- 右侧：下拉箭头 ToggleButton（空模板，无默认悬停效果） -->
+                        <ToggleButton x:Name="toggleButton"
+                                      Grid.Column="1"
+                                      IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}"
+                                      ClickMode="Press"
+                                      Focusable="False"
+                                      IsTabStop="False"
+                                      Background="Transparent"
+                                      BorderThickness="0"
+                                      HorizontalAlignment="Center"
+                                      VerticalAlignment="Center">
+                            <ToggleButton.Template>
+                                <ControlTemplate TargetType="ToggleButton">
+                                    <Border Background="Transparent" Padding="4">
+                                        <Path Width="10" Height="6"
+                                              Stretch="Uniform"
+                                              Stroke="{DynamicResource ForegroundDimBrush}"
+                                              StrokeThickness="1.5"
+                                              StrokeStartLineCap="Round"
+                                              StrokeEndLineCap="Round"
+                                              Data="M1,1 L5,5 L9,1" />
+                                    </Border>
+                                </ControlTemplate>
+                            </ToggleButton.Template>
+                        </ToggleButton>
+
+                        <!-- 下拉弹窗 -->
+                        <Popup x:Name="PART_Popup"
+                               IsOpen="{TemplateBinding IsDropDownOpen}"
+                               Placement="Bottom"
+                               AllowsTransparency="True"
+                               PopupAnimation="Fade"
+                               MinWidth="{Binding ActualWidth, ElementName=bd}">
+                            <Border Background="{DynamicResource CardBackgroundBrush}"
+                                    BorderBrush="{DynamicResource BorderBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="6"
+                                    Padding="4"
+                                    Margin="0,2,0,0">
+                                <ScrollViewer MaxHeight="280"
+                                              VerticalScrollBarVisibility="Auto"
+                                              HorizontalScrollBarVisibility="Disabled">
+                                    <StackPanel IsItemsHost="True" />
+                                </ScrollViewer>
+                            </Border>
+                        </Popup>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsEditable" Value="True">
+                            <Setter TargetName="PART_EditableTextBox" Property="Visibility" Value="Visible" />
+                            <Setter TargetName="contentPresenter" Property="Visibility" Value="Collapsed" />
+                        </Trigger>
+                        <Trigger Property="IsDropDownOpen" Value="True">
+                            <Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ============ 右键菜单（ContextMenu / Menu / MenuItem / Separator）主题适配 ============ -->
+
+    <Style TargetType="ContextMenu">
+        <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Padding" Value="4" />
+        <Setter Property="FontSize" Value="{StaticResource FontSizeBody}" />
+        <Setter Property="SnapsToDevicePixels" Value="True" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ContextMenu">
+                    <Border Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="6"
+                            Padding="{TemplateBinding Padding}"
+                            SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}">
+                        <ScrollViewer CanContentScroll="True"
+                                      VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Disabled">
+                            <ItemsPresenter KeyboardNavigation.TabNavigation="Cycle"
+                                            SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}" />
+                        </ScrollViewer>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- 子菜单容器（如“移动到分组…”展开的菜单）使用与 ContextMenu 一致的视觉 -->
+    <Style TargetType="Menu">
+        <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Padding" Value="4" />
+        <Setter Property="FontSize" Value="{StaticResource FontSizeBody}" />
+        <Setter Property="SnapsToDevicePixels" Value="True" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Menu">
+                    <Border Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="6"
+                            Padding="{TemplateBinding Padding}"
+                            SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}">
+                        <ItemsPresenter SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}" />
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+
+
+    <Style TargetType="MenuItem">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
+        <Setter Property="Padding" Value="8,5" />
+        <Setter Property="SnapsToDevicePixels" Value="True" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="MenuItem">
+                    <Grid SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}">
+                        <Border x:Name="templateRoot"
+                                Background="{TemplateBinding Background}"
+                                BorderThickness="0"
+                                CornerRadius="4"
+                                Padding="{TemplateBinding Padding}"
+                                SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="22" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="16" />
+                                </Grid.ColumnDefinitions>
+
+                                <!-- 勾选标记 / 图标 -->
+                                <Grid Grid.Column="0" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <ContentPresenter x:Name="IconPresenter"
+                                                      ContentSource="Icon"
+                                                      SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}" />
+                                    <Path x:Name="CheckMark"
+                                          Data="M1,4 L3.5,6.5 L7,1"
+                                          Stroke="{TemplateBinding Foreground}"
+                                          StrokeThickness="1.5"
+                                          StrokeStartLineCap="Round"
+                                          StrokeEndLineCap="Round"
+                                          Visibility="Collapsed" />
+                                </Grid>
+
+                                <!-- Header -->
+                                <ContentPresenter x:Name="HeaderPresenter"
+                                                  Grid.Column="1"
+                                                  ContentSource="Header"
+                                                  RecognizesAccessKey="True"
+                                                  VerticalAlignment="Center"
+                                                  Margin="4,0,8,0"
+                                                  TextElement.Foreground="{TemplateBinding Foreground}" />
+
+                                <!-- 快捷键 -->
+                                <TextBlock x:Name="InputGestureText"
+                                           Grid.Column="2"
+                                           Text="{TemplateBinding InputGestureText}"
+                                           Foreground="{DynamicResource ForegroundDimBrush}"
+                                           VerticalAlignment="Center"
+                                           Margin="8,0,0,0" />
+
+                                <!-- 子菜单箭头 -->
+                                <Path x:Name="Arrow"
+                                      Grid.Column="3"
+                                      HorizontalAlignment="Center"
+                                      VerticalAlignment="Center"
+                                      Data="M0,1 L4,5 L0,9"
+                                      Stroke="{TemplateBinding Foreground}"
+                                      StrokeThickness="1.5"
+                                      StrokeStartLineCap="Round"
+                                      StrokeEndLineCap="Round"
+                                      Visibility="Collapsed" />
+                            </Grid>
+                        </Border>
+
+                        <!-- 子菜单弹窗 -->
+                        <Popup x:Name="SubMenuPopup"
+                               IsOpen="{Binding IsSubmenuOpen, RelativeSource={RelativeSource TemplatedParent}}"
+                               Placement="Right"
+                               HorizontalOffset="-2"
+                               VerticalOffset="-3"
+                               AllowsTransparency="True"
+                               PopupAnimation="Fade"
+                               Focusable="False">
+                            <Border Background="{DynamicResource CardBackgroundBrush}"
+                                    BorderBrush="{DynamicResource BorderBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="6"
+                                    Padding="4">
+                                <ScrollViewer CanContentScroll="True"
+                                              VerticalScrollBarVisibility="Auto"
+                                              HorizontalScrollBarVisibility="Disabled">
+                                    <ItemsPresenter KeyboardNavigation.TabNavigation="Cycle"
+                                                    SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}" />
+                                </ScrollViewer>
+                            </Border>
+                        </Popup>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsHighlighted" Value="True">
+                            <Setter TargetName="templateRoot" Property="Background" Value="{DynamicResource HoverOverlayBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsSubmenuOpen" Value="True">
+                            <Setter TargetName="templateRoot" Property="Background" Value="{DynamicResource HoverOverlayBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.4" />
+                        </Trigger>
+                        <Trigger Property="HasItems" Value="True">
+                            <Setter TargetName="Arrow" Property="Visibility" Value="Visible" />
+                        </Trigger>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="CheckMark" Property="Visibility" Value="Visible" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style TargetType="Separator">
+        <Setter Property="Height" Value="9" />
+        <Setter Property="Margin" Value="0" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Separator">
+                    <Rectangle Height="1"
+                               Margin="8,4"
+                               Fill="{DynamicResource BorderBrush}" />
                 </ControlTemplate>
             </Setter.Value>
         </Setter>

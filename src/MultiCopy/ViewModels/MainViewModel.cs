@@ -258,6 +258,10 @@ public sealed partial class MainViewModel : ObservableObject
     [RelayCommand]
     private void ToggleMode() => ModeOn = !ModeOn;
 
+    /// <summary>重置前缀序号到起始值。</summary>
+    [RelayCommand]
+    private void ResetSequence() => _state.ResetPrefixSequence();
+
     /// <summary>清空搜索框（清除按钮和 Esc 键调用）。</summary>
     [RelayCommand]
     private void ClearSearch() => SearchText = string.Empty;
@@ -350,6 +354,27 @@ public sealed partial class MainViewModel : ObservableObject
     {
         _state.ActiveGroupId = g?.Id;
         RefreshActiveGroupFlags();
+    }
+
+    [RelayCommand]
+    private void PinGroup(ClipboardGroup? g)
+    {
+        if (g == null) return;
+        // 置顶分组不参与自动出队（Peek 跳过置顶分组）。若它当前是活动分组，
+        // 必须先解除活动状态：否则用户新复制的内容会进入置顶分组但 Ctrl+V 粘不出来（"消失"），
+        // 且置顶分组不占容量上限，会绕过 MaxQueueItems 检查无限增长。
+        if (_state.ActiveGroupId == g.Id)
+        {
+            _state.ActiveGroupId = null;
+            RefreshActiveGroupFlags();
+        }
+        _queue.PinGroup(g);
+    }
+
+    [RelayCommand]
+    private void UnpinGroup(ClipboardGroup? g)
+    {
+        if (g != null) _queue.UnpinGroup(g);
     }
 
     // ---------- 点选粘贴（视图调用） ----------

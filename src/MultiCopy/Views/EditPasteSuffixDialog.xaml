@@ -1,0 +1,74 @@
+<Window x:Class="MultiCopy.Views.EditPasteSuffixDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="编辑粘贴附加内容"
+        Width="360" Height="280"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False"
+        Background="{DynamicResource BackgroundBrush}"
+        Foreground="{DynamicResource ForegroundBrush}">
+    <Grid Margin="16,14">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- 标题说明 -->
+        <TextBlock x:Name="TitleTextBlock" Grid.Row="0" Margin="0,0,0,10"
+                   FontSize="{StaticResource FontSizeCaption}"
+                   Foreground="{DynamicResource ForegroundDimBrush}" />
+
+        <!-- 多行编辑区 -->
+        <Border Grid.Row="1" Style="{StaticResource SearchBorder}">
+            <TextBox x:Name="ContentTextBox"
+                     Style="{StaticResource SearchTextBoxStyle}"
+                     TextWrapping="Wrap"
+                     AcceptsReturn="True"
+                     VerticalScrollBarVisibility="Auto"
+                     VerticalContentAlignment="Top"
+                     Padding="8,6" />
+        </Border>
+
+        <!-- 预设按钮区 -->
+        <WrapPanel Grid.Row="2" Margin="0,10,0,0">
+            <Button Content="，" Tag="，" Click="PresetButton_Click"
+                    Style="{StaticResource SecondaryButton}" Margin="0,0,6,6" Padding="8,4" />
+            <Button Content="。" Tag="。" Click="PresetButton_Click"
+                    Style="{StaticResource SecondaryButton}" Margin="0,0,6,6" Padding="8,4" />
+            <Button Content="、" Tag="、" Click="PresetButton_Click"
+                    Style="{StaticResource SecondaryButton}" Margin="0,0,6,6" Padding="8,4" />
+            <Button Content="；" Tag="；" Click="PresetButton_Click"
+                    Style="{StaticResource SecondaryButton}" Margin="0,0,6,6" Padding="8,4" />
+            <Button Content="：" Tag="：" Click="PresetButton_Click"
+                    Style="{StaticResource SecondaryButton}" Margin="0,0,6,6" Padding="8,4" />
+            <Button Content="！" Tag="！" Click="PresetButton_Click"
+                    Style="{StaticResource SecondaryButton}" Margin="0,0,6,6" Padding="8,4" />
+            <Button Content="？" Tag="？" Click="PresetButton_Click"
+                    Style="{StaticResource SecondaryButton}" Margin="0,0,6,6" Padding="8,4" />
+            <Button Content="空格" Tag=" " Click="PresetButton_Click"
+                    Style="{StaticResource SecondaryButton}" Margin="0,0,6,6" Padding="8,4" />
+            <Button Content="回车" Tag="&#13;&#10;" Click="PresetButton_Click"
+                    Style="{StaticResource SecondaryButton}" Margin="0,0,0,6" Padding="8,4" />
+        </WrapPanel>
+
+        <!-- 按钮区：左侧"一键清空"（辅助操作），右侧"确定/取消"（主操作）。
+             分离布局避免 destructive 操作与"确定"相邻，防误触。 -->
+        <Grid Grid.Row="3" Margin="0,8,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <Button Grid.Column="0" Content="一键清空" Click="Clear_Click"
+                    Style="{StaticResource SecondaryButton}" Padding="10,4" />
+            <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button Content="确定" IsDefault="True" Click="Ok_Click"
+                        Style="{StaticResource PrimaryButton}" Margin="0,0,8,0" />
+                <Button Content="取消" IsCancel="True" Click="Cancel_Click"
+                        Style="{StaticResource SecondaryButton}" />
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Window>

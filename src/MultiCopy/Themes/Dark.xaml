@@ -37,4 +37,14 @@
     <SolidColorBrush x:Key="HoverOverlayBrush" Color="{StaticResource HoverOverlayColor}" />
     <SolidColorBrush x:Key="ThumbnailBackgroundBrush" Color="{StaticResource ThumbnailBackgroundColor}" />
 
+    <!-- ============ 系统颜色覆盖（让 WPF 默认控件适配暗黑主题） ============ -->
+    <SolidColorBrush x:Key="{x:Static SystemColors.WindowBrushKey}" Color="{StaticResource CardBackgroundColor}" />
+    <SolidColorBrush x:Key="{x:Static SystemColors.WindowTextBrushKey}" Color="{StaticResource ForegroundColor}" />
+    <SolidColorBrush x:Key="{x:Static SystemColors.ControlBrushKey}" Color="{StaticResource CardBackgroundColor}" />
+    <SolidColorBrush x:Key="{x:Static SystemColors.ControlTextBrushKey}" Color="{StaticResource ForegroundColor}" />
+    <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}" Color="{StaticResource AccentColor}" />
+    <SolidColorBrush x:Key="{x:Static SystemColors.HighlightTextBrushKey}" Color="{StaticResource AccentForegroundColor}" />
+    <SolidColorBrush x:Key="{x:Static SystemColors.MenuBrushKey}" Color="{StaticResource CardBackgroundColor}" />
+    <SolidColorBrush x:Key="{x:Static SystemColors.MenuTextBrushKey}" Color="{StaticResource ForegroundColor}" />
+
 </ResourceDictionary>

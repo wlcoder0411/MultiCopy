@@ -31,7 +31,8 @@ public sealed class ClipboardQueue
 
     public bool IsEmpty => !HasNormal && PinnedItems.Count == 0;
 
-    public int NormalCount => UngroupedItems.Count + SumGroupItems();
+    /// <summary>普通项数量（不含置顶分组内的项，用于容量上限检查）。</summary>
+    public int NormalCount => UngroupedItems.Count + SumNonPinnedGroupItems();
 
     /// <summary>队列内容变化时触发（用于刷新空状态提示、IsGrouping 等）。</summary>
     public event EventHandler? Changed;
@@ -45,10 +46,12 @@ public sealed class ClipboardQueue
         return false;
     }
 
-    private int SumGroupItems()
+    /// <summary>非置顶分组内的项数总和（置顶分组内的项不占用容量上限）。</summary>
+    private int SumNonPinnedGroupItems()
     {
         int sum = 0;
-        foreach (var g in Groups) sum += g.Items.Count;
+        foreach (var g in Groups)
+            if (!g.IsPinned) sum += g.Items.Count;
         return sum;
     }
 
@@ -80,16 +83,20 @@ public sealed class ClipboardQueue
     public ClipboardItem? Peek(string? activeGroupId = null)
     {
         // 选中了某分组：只看这一组。分组内按 Items 顺序（入队顺序）出队。
+        // 置顶分组不参与自动出队（组内项享有置顶语义，Ctrl+V 不消费）。
         if (FindGroup(activeGroupId) is { } g)
         {
+            if (g.IsPinned) return null;
             return g.Items.Count > 0 ? g.Items[0] : null;
         }
 
         // 未选中分组：全局 FIFO，跨所有集合取 CreatedAt 最早项。
+        // 跳过置顶分组（置顶分组内的项不参与自动出队）。
         ClipboardItem? best = null;
         if (UngroupedItems.Count > 0) best = UngroupedItems[0];
         foreach (var grp in Groups)
         {
+            if (grp.IsPinned) continue;
             if (grp.Items.Count == 0) continue;
             var head = grp.Items[0];
             if (best == null || head.CreatedAt < best.CreatedAt)
@@ -167,6 +174,16 @@ public sealed class ClipboardQueue
         }
     }
 
+    /// <summary>从持久化存储加载分组列表（应用启动时调用）。不触发 OnChanged（启动阶段 UI 尚未就绪）。</summary>
+    public void LoadGroups(IEnumerable<ClipboardGroup> groups)
+    {
+        foreach (var g in groups)
+        {
+            if (!Groups.Contains(g))
+                Groups.Add(g);
+        }
+    }
+
     /// <summary>置顶：从普通队列（未分组或某分组）移到置顶集合。</summary>
     public void Pin(ClipboardItem item)
     {
@@ -207,6 +224,7 @@ public sealed class ClipboardQueue
         UngroupedItems.Clear();
         foreach (var g in Groups)
         {
+            if (g.IsPinned) continue; // 置顶分组不被清空
             if (g.Items.Count > 0) changed = true;
             g.Items.Clear();
         }
@@ -256,6 +274,49 @@ public sealed class ClipboardQueue
         if (!Groups.Contains(g)) return;
         g.Items.Clear();
         OnChanged();
+    }
+
+    // ---------- 分组置顶 / 取消置顶 ----------
+
+    /// <summary>
+    /// 置顶分组：标记 IsPinned=true，记录 PinnedAt，移到 Groups 中所有已置顶分组之后、普通分组之前。
+    /// 组内项享有置顶语义（双击粘贴并保留、不参与自动出队、跨会话保留），但仍归属本分组。
+    /// </summary>
+    public void PinGroup(ClipboardGroup g)
+    {
+        if (!Groups.Contains(g) || g.IsPinned) return;
+        g.IsPinned = true;
+        g.PinnedAt = DateTime.Now;
+        // 移到所有已置顶分组之后、普通分组之前（即置顶分组的末尾位置）
+        // 注意：此时 g.IsPinned 已为 true，CountPinnedGroups 包含 g 自身
+        int targetIdx = CountPinnedGroups() - 1;
+        int curIdx = Groups.IndexOf(g);
+        if (curIdx != targetIdx)
+            Groups.Move(curIdx, targetIdx);
+        OnChanged();
+    }
+
+    /// <summary>取消置顶分组：标记 IsPinned=false，移到所有置顶分组之后（普通分组的开头）。</summary>
+    public void UnpinGroup(ClipboardGroup g)
+    {
+        if (!Groups.Contains(g) || !g.IsPinned) return;
+        g.IsPinned = false;
+        g.PinnedAt = null;
+        // 移到所有置顶分组之后（此时 g.IsPinned 已为 false，CountPinnedGroups 不含 g）
+        int targetIdx = CountPinnedGroups();
+        int curIdx = Groups.IndexOf(g);
+        if (curIdx != targetIdx)
+            Groups.Move(curIdx, targetIdx);
+        OnChanged();
+    }
+
+    /// <summary>统计当前置顶分组数量。</summary>
+    private int CountPinnedGroups()
+    {
+        int n = 0;
+        foreach (var g in Groups)
+            if (g.IsPinned) n++;
+        return n;
     }
 
     // ---------- 内部：跨集合移除不触发 OnChanged（供 Pin 复用） ----------
