@@ -141,6 +141,21 @@ public sealed class TrayIconService : IDisposable
         _tray?.ShowBalloonTip("MultiCopy", "队列已满，请先清理后再复制", BalloonIcon.Info);
     }
 
+    /// <summary>上次"粘贴目标未就绪"气泡的时间（Tick64），用于 5 秒节流防止连点刷屏。</summary>
+    private long _lastPasteBlockedTipTicks;
+
+    /// <summary>
+    /// 点选粘贴被阻止（前台仍是 MultiCopy 自身，Ctrl+V 无法送达目标）时的气泡提示。
+    /// 5 秒节流：连续点击不重复弹。
+    /// </summary>
+    public void ShowPasteBlockedTip()
+    {
+        long now = Environment.TickCount64;
+        if (now - _lastPasteBlockedTipTicks < 5000) return;
+        _lastPasteBlockedTipTicks = now;
+        _tray?.ShowBalloonTip("MultiCopy", "粘贴目标未就绪：请先点击目标窗口定位光标，再点选内容", BalloonIcon.Warning);
+    }
+
     /// <summary>根据模式和监控状态更新托盘 Tooltip。</summary>
     private void UpdateTrayToolTip()
     {

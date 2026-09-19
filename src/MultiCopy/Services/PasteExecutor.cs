@@ -50,9 +50,18 @@ public sealed class PasteExecutor
         }
 
         _state.IsSimulatingPaste = true;
+        bool injected;
         try
         {
-            SendCtrlV();
+            // 写入成功后稍候再注入按键：EmptyClipboard/SetClipboardData 会向所有剪贴板
+            // 监听者广播 WM_CLIPBOARDUPDATE（Excel/Word 的 Office 剪贴板会立即开锁读取
+            // 新内容），立即注入 Ctrl+V 可能与它们竞争剪贴板锁，导致目标应用粘贴失败
+            // （项已出队的静默丢失）。50ms 足够观察者处理完，用户无感知。
+            // 仅点选路径需要：Ctrl+V 拦截路径（KeyboardHookService）在钩子回调内，
+            // 受低级钩子 300ms 超时限制，且物理按键时序天然正确，无需延迟。
+            System.Threading.Thread.Sleep(50);
+
+            injected = SendCtrlV();
         }
         finally
         {
@@ -60,7 +69,9 @@ public sealed class PasteExecutor
             _state.IsSimulatingPaste = false;
         }
 
-        if (!keepAfterPaste)
+        // 注入不完整（如目标以管理员运行时被 UIPI 静默阻止，SendInput 返回 0）
+        // 则不出队，保留项待用户重试——与写剪贴板失败同等的保守语义。
+        if (!keepAfterPaste && injected)
         {
             queue.RemoveNormal(item);
         }
@@ -93,6 +104,7 @@ public sealed class PasteExecutor
         return inputs;
     }
 
-    private static void SendCtrlV()
-        => Win32.SendInput((uint)_ctrlVInputs.Length, _ctrlVInputs, INPUT.Size);
+    /// <summary>注入 Ctrl+V。返回是否全部事件注入成功（false=被 UIPI 等阻止，粘贴不会送达）。</summary>
+    private static bool SendCtrlV()
+        => Win32.SendInput((uint)_ctrlVInputs.Length, _ctrlVInputs, INPUT.Size) == (uint)_ctrlVInputs.Length;
 }

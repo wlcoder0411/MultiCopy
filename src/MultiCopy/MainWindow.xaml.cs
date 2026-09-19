@@ -259,12 +259,14 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// 点列表项粘贴前调用：把焦点还给目标应用，让 SendInput Ctrl+V 到达目标。
+    /// 点列表项粘贴前调用：把焦点交给目标应用，让 SendInput Ctrl+V 到达目标。
     /// 目标窗口选择优先级：当前前台窗口（用户调出 MultiCopy 后可能切换了目标）> _targetHwndBeforeSearch（调出时记录的）。
     /// 这样用户在调出 MultiCopy 后切换到网页粘贴时，不会误把焦点切回复制源软件。
     /// 调用后强制重置 _searchActive，确保下次搜索框 GotFocus 重新记录目标。
+    /// 返回粘贴是否可执行：true=前台已就绪为预期目标；false=前台仍是 MultiCopy 自身
+    /// （Ctrl+V 会发给自己，粘贴必然失败），调用方应跳过粘贴并保留该项待用户重试。
     /// </summary>
-    private void RestoreTargetFocusBeforePaste()
+    private bool RestoreTargetFocusBeforePaste()
     {
         IntPtr hwnd = new WindowInteropHelper(this).Handle;
         // 优先使用当前前台窗口：用户调出 MultiCopy 后可能切换了粘贴目标（如切到网页对话框）。
@@ -275,42 +277,63 @@ public partial class MainWindow : Window
             _targetHwndBeforeSearch = currentFg;
         }
 
-        if (_targetHwndBeforeSearch == IntPtr.Zero)
+        IntPtr target = _targetHwndBeforeSearch;
+        _searchActive = false; // 强制下次 GotFocus 重新记录目标应用
+        ApplyNoActivate();     // 恢复 NOACTIVATE（粘贴后窗口回到不抢焦点状态）
+
+        // 目标无效或已销毁（窗口被关闭后句柄悬空）：清零丢弃，
+        // 仅当前台非自身时粘贴才可能送达
+        if (target == IntPtr.Zero || target == hwnd || !Win32.IsWindow(target))
         {
-            _searchActive = false; // 兜底：确保状态一致
-            return;
+            _targetHwndBeforeSearch = IntPtr.Zero;
+            return Win32.GetForegroundWindow() != hwnd;
         }
+
+        // 目标已是前台：完全跳过切换。AttachThreadInput 会短暂合并/重置两线程的
+        // 输入状态，对已就绪的焦点是无谓扰动——曾导致紧随的 Ctrl+V 偶发无法
+        // 到达目标（项已出队却没粘上，内容静默丢失）。
+        if (Win32.GetForegroundWindow() == target)
+        {
+            _targetHwndBeforeSearch = IntPtr.Zero; // 粘贴目标已就绪，消费掉记录
+            return true;
+        }
+
         try
         {
-            if (_targetHwndBeforeSearch == hwnd)
-            {
-                _targetHwndBeforeSearch = IntPtr.Zero;
-                _searchActive = false;
-                return;
-            }
-            uint targetThread = Win32.GetWindowThreadProcessId(_targetHwndBeforeSearch, out _);
+            uint targetThread = Win32.GetWindowThreadProcessId(target, out _);
             uint ourThread = Win32.GetCurrentThreadId();
             if (targetThread != ourThread)
             {
                 Win32.AttachThreadInput(ourThread, targetThread, true);
-                Win32.SetForegroundWindow(_targetHwndBeforeSearch);
+                Win32.SetForegroundWindow(target);
                 Win32.AttachThreadInput(ourThread, targetThread, false);
             }
             else
             {
-                Win32.SetForegroundWindow(_targetHwndBeforeSearch);
+                Win32.SetForegroundWindow(target);
             }
-            // 给 Windows 一点时间完成前台切换（SendInput 紧随其后）
-            // 30ms 是经验值：足够 SetForegroundWindow 生效，又不至于让用户感知卡顿
-            System.Threading.Thread.Sleep(30);
+
+            // 轮询等待前台切换真正完成（上限 200ms，切换成功即提前退出）。
+            // 固定 Sleep(30) 不验证切换结果：SetForegroundWindow 在前台锁下可能
+            // 静默失败，此时注入的 Ctrl+V 会发给切换前的窗口（甚至 MultiCopy 自身），
+            // 造成"出队了却没粘上"。识别失败则返回 false，让调用方保留该项。
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            while (Win32.GetForegroundWindow() != target && sw.ElapsedMilliseconds < 200)
+            {
+                System.Threading.Thread.Sleep(5);
+            }
         }
         catch
         {
-            // 失败不阻塞粘贴
+            // 失败不阻塞粘贴（尽力发送）
         }
-        _targetHwndBeforeSearch = IntPtr.Zero;
-        _searchActive = false; // 强制下次 GotFocus 重新记录目标应用
-        ApplyNoActivate();     // 恢复 NOACTIVATE（粘贴后窗口回到不抢焦点状态）
+
+        bool ok = Win32.GetForegroundWindow() == target;
+        // 仅成功时消费记录；失败时保留 _targetHwndBeforeSearch，下次点击列表项
+        // 自动重试切换——避免"一次失败后 target 被清零、前台仍是自身、后续点击
+        // 恒返回 false"的软死循环（用户反复点击无反应）。
+        if (ok) _targetHwndBeforeSearch = IntPtr.Zero;
+        return ok;
     }
 
     // ---------- 普通项：单击粘贴并移除 ----------
@@ -322,7 +345,13 @@ public partial class MainWindow : Window
 
         if (sender is FrameworkElement fe && fe.DataContext is ClipboardItem item)
         {
-            RestoreTargetFocusBeforePaste(); // 搜索框曾获焦时把焦点还给目标应用
+            // 搜索框曾获焦时把焦点还给目标应用；前台未就绪（仍是自身）时
+            // Ctrl+V 会发给 MultiCopy 自己，跳过粘贴并保留该项待用户重试
+            if (!RestoreTargetFocusBeforePaste())
+            {
+                (Application.Current as App)?.Tray?.ShowPasteBlockedTip();
+                return;
+            }
             _vm.PasteNormalItem(item);
         }
     }
@@ -336,7 +365,12 @@ public partial class MainWindow : Window
 
         if (sender is FrameworkElement fe && fe.DataContext is ClipboardItem item)
         {
-            RestoreTargetFocusBeforePaste();
+            // 前台未就绪（仍是自身）时跳过粘贴，保留项待重试（同 NormalItem_Click）
+            if (!RestoreTargetFocusBeforePaste())
+            {
+                (Application.Current as App)?.Tray?.ShowPasteBlockedTip();
+                return;
+            }
             _vm.PastePinnedItem(item);
         }
     }

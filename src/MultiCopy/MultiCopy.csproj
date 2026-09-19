@@ -15,6 +15,12 @@
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <!-- 禁用 NuGet 漏洞审计：避免每次构建访问 nuget.org 超时拖慢编译 -->
     <NuGetAudit>false</NuGetAudit>
+    <!-- 锁定自包含发布用的运行时包版本（8.0.30，已缓存到本地）。
+         不锁定的话，SDK 会跟随机器安装的 .NET 8 运行时版本（每月安全更新会变），
+         导致本地缓存版本不匹配、离线还原失败。需要更新运行时时改这里即可。 -->
+    <MicrosoftNETCoreAppRuntimeVersion>8.0.30</MicrosoftNETCoreAppRuntimeVersion>
+    <MicrosoftAspNetCoreAppRuntimeVersion>8.0.30</MicrosoftAspNetCoreAppRuntimeVersion>
+    <MicrosoftWindowsDesktopAppRuntimeVersion>8.0.30</MicrosoftWindowsDesktopAppRuntimeVersion>
   </PropertyGroup>
 
   <ItemGroup>
