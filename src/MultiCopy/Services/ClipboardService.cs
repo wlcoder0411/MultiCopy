@@ -86,7 +86,7 @@ public sealed class ClipboardService
         if (!Win32.IsClipboardFormatAvailable(Constants.CF_UNICODETEXT))
             return null;
 
-        if (!Win32.OpenClipboard(IntPtr.Zero))
+        if (!TryOpenClipboard())
             return null;
 
         try
@@ -122,6 +122,22 @@ public sealed class ClipboardService
         finally { Win32.CloseClipboard(); }
     }
 
+    /// <summary>
+    /// 带重试地打开剪贴板（读路径专用）。
+    /// 此前读路径单次尝试失败即返回 null，剪贴板被其他应用瞬时占用时整次
+    /// WM_CLIPBOARDUPDATE 会被静默丢弃（漏采集）。有界重试（默认 4 次 × 5ms，约 20ms 上限）
+    /// 覆盖绝大多数瞬时争用，同时把 UI 线程阻塞控制在可接受范围。
+    /// </summary>
+    private static bool TryOpenClipboard(int attempts = 4, int delayMs = 5)
+    {
+        for (int i = 0; i < attempts; i++)
+        {
+            if (Win32.OpenClipboard(IntPtr.Zero)) return true;
+            if (i < attempts - 1) Thread.Sleep(delayMs); // 最后一次失败后不再空等
+        }
+        return false;
+    }
+
     // ---------- 图片读写 ----------
 
     /// <summary>
@@ -144,7 +160,7 @@ public sealed class ClipboardService
 
     private (BitmapSource image, int width, int height)? TryReadImage(uint format)
     {
-        if (!Win32.OpenClipboard(IntPtr.Zero)) return null;
+        if (!TryOpenClipboard()) return null;
         try
         {
             IntPtr hData = Win32.GetClipboardData(format);

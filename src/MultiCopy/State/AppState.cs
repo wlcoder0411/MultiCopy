@@ -37,6 +37,16 @@ public sealed class AppState
     /// <summary>普通队列容量上限（含未分组+所有分组）。超出后不再采集，并提示用户清理。</summary>
     public const int MaxQueueItems = 30;
 
+    /// <summary>
+    /// 粘贴回音抑制窗口（毫秒）。队列粘贴后，目标应用可能把刚粘贴的内容
+    /// 写回剪贴板（典型：资源管理器新建文件夹的重命名编辑框），窗口内相同文本不采集。
+    /// 5 秒覆盖"粘贴→重命名提交"的连续操作，又不至于误伤后续真正的同文本复制。
+    /// </summary>
+    public const int PasteEchoWindowMs = 5000;
+
+    /// <summary>单条采集文本上限（防超大文本拖慢）。监听截断与回音记录共用同一标准。</summary>
+    public const int MaxItemLength = 100_000;
+
     private volatile bool _modeOn;
     private volatile bool _isMonitoring = true; // 默认开启监控
     private string? _activeGroupId;
@@ -239,6 +249,39 @@ public sealed class AppState
     /// 防钩子重入：PasteExecutor 用 SendInput 模拟 Ctrl+V 时置位，钩子检测到则放行不拦截。
     /// </summary>
     public volatile bool IsSimulatingPaste;
+
+    /// <summary>
+    /// 最近若干次队列粘贴写入剪贴板的文本（含前后缀拼接结果，按 MaxItemLength 截断）。
+    /// 由 KeyboardHookService（Ctrl+V 路径）和 PasteExecutor（点选路径）在写剪贴板成功后记录，
+    /// ClipboardListenerService 用于识别"粘贴回音"（目标应用把刚粘贴的内容写回剪贴板）。
+    /// 用小集合而非单槽位：交错粘贴（重命名框悬置未提交 + 中途另一次队列粘贴）时，
+    /// 单槽位会被覆盖导致早先的回音漏抑制。仅 UI 线程读写，无需锁。
+    /// </summary>
+    private readonly List<(string Text, long Ticks)> _recentPastes = new(8);
+
+    /// <summary>记录一次队列粘贴写入剪贴板的文本（供回音抑制判定）。</summary>
+    public void RecordPastedText(string text)
+    {
+        // 与监听侧截断标准一致，保证回音比对逐字节匹配
+        if (text.Length > MaxItemLength) text = text.Substring(0, MaxItemLength);
+        long now = Environment.TickCount64;
+        // 清理过期记录
+        _recentPastes.RemoveAll(p => now - p.Ticks >= PasteEchoWindowMs);
+        _recentPastes.Add((text, now));
+        // 容量上限：只保留最近 8 条，防无界增长
+        if (_recentPastes.Count > 8) _recentPastes.RemoveRange(0, _recentPastes.Count - 8);
+    }
+
+    /// <summary>判定剪贴板文本是否为粘贴回音（与最近一次队列粘贴内容相同且在窗口内）。</summary>
+    public bool IsPasteEcho(string text)
+    {
+        long now = Environment.TickCount64;
+        foreach (var p in _recentPastes)
+        {
+            if (p.Text == text && now - p.Ticks < PasteEchoWindowMs) return true;
+        }
+        return false;
+    }
 
     /// <summary>模式变化通知（oldValue→newValue）。</summary>
     public event EventHandler<bool>? ModeChanged;

@@ -33,6 +33,9 @@ public sealed class PasteExecutor
                 writeOk = _clipboard.SetClipboardTextSync(textToPaste);
                 // 文本写失败：直接返回（目标应用粘贴当前剪贴板，降级为普通粘贴）
                 if (!writeOk) return;
+                // 记录粘贴文本：目标应用可能把刚粘贴的内容写回剪贴板
+                // （资源管理器重命名框），监听器据此识别回音不采集
+                _state.RecordPastedText(textToPaste);
                 break;
 
             case ImageClipboardItem imgItem:

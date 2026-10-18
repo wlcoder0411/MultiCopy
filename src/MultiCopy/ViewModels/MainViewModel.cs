@@ -352,7 +352,16 @@ public sealed partial class MainViewModel : ObservableObject
     [RelayCommand]
     private void SetActiveGroup(ClipboardGroup? g)
     {
-        _state.ActiveGroupId = g?.Id;
+        // 置顶分组不允许成为活动分组：组内项享有置顶语义、不参与自动出队，
+        // 一旦设为活动，新复制内容会持续落入该组，而 NormalCount 排除置顶分组，
+        // 既绕过 MaxQueueItems 上限无限增长，又让新内容 Ctrl+V 粘不出来（“消失”）。
+        if (g is { IsPinned: true }) return;
+
+        // 再次点击当前活动分组 = 取消选中，回到“未分组 / 全局 FIFO”模式。
+        // 此前该命令恒把 ActiveGroupId 设为点击分组，用户一旦选中分组就没有退出通道
+        // （新复制内容持续入组、Ctrl+V 只消耗该组），只剩删除/置顶分组两条路，属可用性死角。
+        var targetId = g?.Id;
+        _state.ActiveGroupId = (targetId != null && _state.ActiveGroupId == targetId) ? null : targetId;
         RefreshActiveGroupFlags();
     }
 

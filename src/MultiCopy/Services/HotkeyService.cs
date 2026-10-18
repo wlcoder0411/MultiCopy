@@ -58,28 +58,30 @@ public sealed class HotkeyService : IDisposable
     {
         Unregister();
 
-        _settings = new SettingsStorageService.SettingsDto
-        {
-            HotkeyEnabled = enabled,
-            Modifiers = modifiers,
-            Key = key,
-        };
+        // 增量更新：在磁盘上已有的设置基础上只改热键相关字段，其余字段（粘贴前缀/后缀、
+        // 序号配置等）原样保留后再落盘。
+        // 此前这里 new 了一个只含热键三字段的新 SettingsDto 直接 Save，会以默认值覆盖
+        // settings.json，把用户配置的前后缀与序号冲刷掉（尤其注册失败早退时 DoApply 的
+        // 再合并不会执行，擦除会永久留在磁盘上）。
+        var previous = _settings;
+        var current = SettingsStorageService.Load();
+        current.HotkeyEnabled = enabled;
+        current.Modifiers = modifiers;
+        current.Key = key;
 
-        if (enabled)
+        if (enabled && !TryRegister(modifiers, key))
         {
-            if (!TryRegister(modifiers, key))
-            {
-                // 注册失败：保持 HotkeyEnabled=false 状态（已 Unregister），
-                // 保存为禁用态避免每次启动反复失败。调用方应提示用户换一组。
-                _settings.HotkeyEnabled = false;
-                SettingsStorageService.Save(_settings);
-                SettingsChanged?.Invoke(this, _settings);
-                return (false, "快捷键注册失败，可能已被其他程序占用，请换一组组合试试。");
-            }
+            // 注册失败：回滚而非写盘。Unregister 已把原热键摘掉，这里把它注册回来，
+            // 且不改动磁盘设置。否则用户点“取消”后原快捷键会永久失效
+            // （Cancel 的还原分支因 _applied* 未变而不会触发），磁盘也会被写成禁用态。
+            if (previous.HotkeyEnabled)
+                TryRegister(previous.Modifiers, previous.Key);
+            return (false, "快捷键注册失败，可能已被其他程序占用，请换一组组合试试。");
         }
 
-        SettingsStorageService.Save(_settings);
-        SettingsChanged?.Invoke(this, _settings);
+        _settings = current;
+        SettingsStorageService.Save(current);
+        SettingsChanged?.Invoke(this, current);
         return (true, null);
     }
 

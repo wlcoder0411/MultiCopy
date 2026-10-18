@@ -69,10 +69,17 @@ public sealed class KeyboardHookService : IDisposable
                         case TextClipboardItem textItem:
                             // 追加前后缀内容和序号（通过 AppState.BuildPasteText 统一拼接，图片项不追加）
                             string textToPaste = _state.BuildPasteText(textItem.Text);
-                            writeOk = _clipboard.SetClipboardTextSync(textToPaste);
+                            // 缩窄锁等待预算：本回调运行在低级键盘钩子里，整体耗时受
+                            // LowLevelHooksTimeout（默认 300ms）约束，超时会导致系统输入卡顿
+                            // 甚至钩子被摘除。150ms 远超正常争用耗时，又给最坏情况留出余量。
+                            writeOk = _clipboard.SetClipboardTextSync(textToPaste, 150);
+                            // 记录粘贴文本：目标应用可能把刚粘贴的内容写回剪贴板
+                            // （资源管理器重命名框），监听器据此识别回音不采集
+                            if (writeOk) _state.RecordPastedText(textToPaste);
                             break;
                         case ImageClipboardItem imgItem:
-                            writeOk = _clipboard.SetClipboardImageSync(imgItem.Image);
+                            // 图片路径最坏情况 = 编码耗时 + 锁等待，同样收窄锁等待以控制总时长
+                            writeOk = _clipboard.SetClipboardImageSync(imgItem.Image, 150);
                             // 图片写失败：清空剪贴板（避免粘出上一条文本）
                             if (!writeOk) _clipboard.ClearClipboard();
                             break;

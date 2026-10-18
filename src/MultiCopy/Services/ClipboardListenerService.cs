@@ -34,7 +34,6 @@ public sealed class ClipboardListenerService
 
     private const int DedupWindowMs = 800;
     private const int ImageDedupWindowMs = 1500;
-    private const int MaxItemLength = 100_000; // 单条上限，防超大文本拖慢
     private const int MaxImageDimension = 4096; // 单边像素上限，防超大图片拖慢
 
     public ClipboardListenerService(ClipboardQueue queue, ClipboardService clipboard)
@@ -79,17 +78,39 @@ public sealed class ClipboardListenerService
             string? text = _clipboard.GetClipboardText();
             if (!string.IsNullOrEmpty(text))
             {
-                if (text.Length > MaxItemLength)
-                    text = text.Substring(0, MaxItemLength);
+                if (text.Length > AppState.MaxItemLength)
+                    text = text.Substring(0, AppState.MaxItemLength);
 
-                bool isDup = _lastEnqueuedText == text
+                // 粘贴回音抑制：某些目标应用（典型：资源管理器新建文件夹的重命名
+                // 编辑框）会在粘贴后把刚粘贴的内容写回剪贴板，触发新的
+                // WM_CLIPBOARDUPDATE。此时自身写入的防回环标志已被消费，若不加抑制，
+                // 刚出队的内容会被当作"新复制"重新入队到队尾。
+                // 判定：文本与最近一次队列粘贴写入的内容相同，且在回音窗口内。
+                bool isEcho = _state.IsPasteEcho(text);
+
+                bool isDup = !isEcho
+                             && _lastEnqueuedText == text
                              && _lastEnqueuedTicks > 0
                              && (Environment.TickCount64 - _lastEnqueuedTicks) < DedupWindowMs;
 
-                if (!isDup)
+                if (!isEcho && !isDup)
                 {
+                    // 先更新去重指纹，再判断容量：队列已满时也会提前返回，
+                    // 若不先记录本次文本，同一文本被应用重复触发 WM_CLIPBOARDUPDATE 时
+                    // 会因 isDup 恒假而反复弹出“队列已满”气泡。
                     _lastEnqueuedText = text;
                     _lastEnqueuedTicks = Environment.TickCount64;
+
+                    // 容量检查（与图片分支保持一致）：普通项达到上限后不再采集，气泡提示用户清理。
+                    // 必须显式放在文本分支内——此前文本分支缺失该检查，导致文本队列无界增长，
+                    // 与 AppState.MaxQueueItems/README 宣称的“上限 30 条”不符。
+                    if (_queue.NormalCount >= AppState.MaxQueueItems)
+                    {
+                        _state.NotifyQueueFull();
+                        handled = true;
+                        return IntPtr.Zero;
+                    }
+
                     string sourceApp = GetForegroundAppTitle();
                     _queue.Enqueue(new TextClipboardItem(text, sourceApp), _state.ActiveGroupId);
                 }

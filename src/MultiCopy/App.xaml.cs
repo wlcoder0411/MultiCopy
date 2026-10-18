@@ -17,6 +17,9 @@ public partial class App : Application
     private static readonly string MutexName = "Global\\MultiCopy_SingleInstance";
     private Mutex? _singleInstanceMutex;
 
+    /// <summary>是否真正持有单实例互斥体。仅在 createdNew=true 时为 true。</summary>
+    private bool _mutexOwned;
+
     // 后端服务
     public ClipboardQueue? Queue { get; private set; }
     public ClipboardService? ClipboardSvc { get; private set; }
@@ -40,9 +43,12 @@ public partial class App : Application
         _singleInstanceMutex = new Mutex(initiallyOwned: true, name: MutexName, out bool createdNew);
         if (!createdNew)
         {
+            // 已有实例运行。createdNew=false 时当前进程并不持有该命名互斥体
+            // （initiallyOwned 仅在新建时生效），因此绝不能在此或 OnExit 中释放它。
             Shutdown(0);
             return;
         }
+        _mutexOwned = true;
 
         base.OnStartup(e);
 
@@ -235,7 +241,14 @@ public partial class App : Application
         KeyboardHook?.Dispose();
         Tray?.Dispose();
         HotkeyService?.Dispose();
-        _singleInstanceMutex?.ReleaseMutex();
+        // 仅在真正持有互斥体时释放：非持有者调用 ReleaseMutex 会抛 ApplicationException。
+        // createdNew=false 的二次启动路径会走到 OnExit，此前无条件释放会导致未处理异常。
+        if (_mutexOwned)
+        {
+            try { _singleInstanceMutex?.ReleaseMutex(); }
+            catch (ApplicationException) { /* 非持有者释放：忽略 */ }
+            _mutexOwned = false;
+        }
         _singleInstanceMutex?.Dispose();
         base.OnExit(e);
     }
