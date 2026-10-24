@@ -40,8 +40,6 @@ internal static class Constants
     // 扩展窗口样式
     public const int GWL_EXSTYLE = -20;
     public const int WS_EX_NOACTIVATE = 0x08000000;
-    public const int WS_EX_TOPMOST = 0x00000008;
-    public const int WS_EX_TOOLWINDOW = 0x00000080;
 
     // 全局内存分配标志
     public const uint GMEM_MOVEABLE = 0x0002;

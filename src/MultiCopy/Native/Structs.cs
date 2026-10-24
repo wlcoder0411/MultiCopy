@@ -2,13 +2,6 @@ using System.Runtime.InteropServices;
 
 namespace MultiCopy.Native;
 
-[StructLayout(LayoutKind.Sequential)]
-internal struct POINT
-{
-    public int X;
-    public int Y;
-}
-
 /// <summary>
 /// WH_KEYBOARD_LL 回调收到的结构。
 /// </summary>

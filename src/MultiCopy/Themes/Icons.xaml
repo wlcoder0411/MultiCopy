@@ -5,9 +5,6 @@
          用 <Path Style="{StaticResource IconStyle}" Data="{StaticResource IconXxx}"/> 引用。
          线性图标：StrokeThickness 1.5，线帽/连接 Round；实心图标改 Fill。 -->
 
-    <!-- 列表（标题前缀，替 📋） -->
-    <Geometry x:Key="IconList">M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01</Geometry>
-
     <!-- 图钉（置顶按钮，普通项） -->
     <Geometry x:Key="IconPin">M12 17v5M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z</Geometry>
 
