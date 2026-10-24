@@ -83,8 +83,17 @@ public partial class App : Application
         AppState.Instance.PrefixSequenceFormat = settings.PrefixSequenceFormat;
         AppState.Instance.PrefixSequencePosition = settings.PrefixSequencePosition;
 
+        // 首次使用引导：仅在用户未关闭过时显示
+        ViewModel.ShowOnboarding = !settings.HasSeenOnboarding;
+
+        // 应用持久化主题：必须在创建窗口前，确保 DynamicResource 首次解析即为正确主题
+        if (settings.Theme == AppTheme.Light)
+            ThemeService.Set(AppTheme.Light);
+
         var window = new MainWindow();
         window.SetViewModel(ViewModel);
+        // 应用持久化的窗口位置/尺寸/置顶状态（Show 之前）
+        window.ApplyPersistedWindowState(settings);
         // HotkeyService 必须在 TrayIconService 之前创建（TrayIconService 构造需要它）
         HotkeyService = new HotkeyService(window, settings);
         Tray = new TrayIconService(window, Queue, HotkeyService);

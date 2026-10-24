@@ -1,11 +1,13 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using MultiCopy.Infrastructure;
 using MultiCopy.Models;
 using MultiCopy.Native;
+using MultiCopy.Services;
 using MultiCopy.State;
 using MultiCopy.ViewModels;
 
@@ -22,6 +24,11 @@ public partial class MainWindow : Window
     private MainViewModel? _vm;
     private bool _searchActive; // 搜索框是否持有激活状态（避免重复切换 WS_EX_NOACTIVATE）
     private IntPtr _targetHwndBeforeSearch = IntPtr.Zero; // 搜索框获焦前的目标应用窗口（粘贴时还原焦点用）
+
+    // 窗口状态写盘去重：避免每次隐藏到托盘都重写 settings.json
+    private Rect _lastSavedBounds;
+    private bool _lastSavedTopmost;
+    private bool _hasSavedWindowState;
 
     public MainWindow()
     {
@@ -69,6 +76,7 @@ public partial class MainWindow : Window
                     _searchActive = false;
                     ApplyNoActivate();
                 }
+                SaveWindowState();
             }
             _targetHwndBeforeSearch = IntPtr.Zero;
         };
@@ -76,13 +84,80 @@ public partial class MainWindow : Window
 
     private void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Escape && !string.IsNullOrEmpty(SearchBox.Text))
+        if (_vm == null) return;
+
+        // Esc：先清空搜索，再隐藏窗口
+        if (e.Key == Key.Escape)
         {
-            SearchBox.Text = string.Empty;
-            // 绑定 UpdateSourceTrigger=PropertyChanged 会自动同步到 SearchText
-            SearchBox.Focus();
+            if (!string.IsNullOrEmpty(SearchBox.Text))
+            {
+                SearchBox.Text = string.Empty;
+                SearchBox.Focus();
+            }
+            else
+            {
+                Hide();
+            }
+            e.Handled = true;
+            return;
+        }
+
+        bool ctrl = (Keyboard.Modifiers & ModifierKeys.Control) != 0;
+
+        // 上下方向键：驱动列表选择。保持搜索框焦点，保证继续输入筛选不中断。
+        if (e.Key == Key.Down || e.Key == Key.Up)
+        {
+            _vm.MoveSelection(e.Key == Key.Down ? 1 : -1);
+            e.Handled = true;
+            return;
+        }
+
+        bool searchFocused = SearchBox.IsKeyboardFocusWithin;
+        bool searchHasText = !string.IsNullOrEmpty(SearchBox.Text);
+
+        // Ctrl+Z：搜索框有内容时保留 TextBox 自带的文本撤销
+        if (ctrl && e.Key == Key.Z && (!searchFocused || !searchHasText))
+        {
+            _vm.UndoLastRemovalCommand.Execute(null);
+            e.Handled = true;
+            return;
+        }
+
+        // 焦点在工具栏按钮上时不劫持 Enter/Delete，避免误触发粘贴或删除
+        if (Keyboard.FocusedElement is ButtonBase) return;
+
+        if (e.Key == Key.Enter)
+        {
+            ActivateSelectedItem();
             e.Handled = true;
         }
+        else if (e.Key == Key.Delete && _vm.SelectedItem != null)
+        {
+            // 搜索框有文本时 Delete 用于删除字符，不删除条目
+            if (searchFocused && searchHasText) return;
+            if (_vm.SelectedItem.IsPinned)
+                _vm.DeletePinnedCommand.Execute(_vm.SelectedItem);
+            else
+                _vm.DeleteNormalCommand.Execute(_vm.SelectedItem);
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>粘贴当前键盘选中项：置顶项粘贴后保留，普通项出队。</summary>
+    private void ActivateSelectedItem()
+    {
+        if (_vm?.SelectedItem is not { } item) return;
+
+        if (!RestoreTargetFocusBeforePaste())
+        {
+            (Application.Current as App)?.Tray?.ShowPasteBlockedTip();
+            return;
+        }
+
+        if (_vm.IsKeepAfterPaste(item))
+            _vm.PastePinnedItem(item);
+        else
+            _vm.PasteNormalItem(item);
     }
 
     private void MainWindow_StateChanged(object? sender, EventArgs e)
@@ -107,6 +182,17 @@ public partial class MainWindow : Window
     {
         SupportDialog.Show(this);
     }
+
+    // ---------- 快捷键说明 ----------
+    private void Help_Click(object sender, MouseButtonEventArgs e)
+    {
+        // 底部栏内嵌了撤销按钮，点按钮时不要同时弹出说明
+        if (e.OriginalSource is DependencyObject d && FindAncestor<Button>(d) != null) return;
+        e.Handled = true;
+        HelpDialog.Open(this);
+    }
+
+    private void OpenHelp_Click(object sender, RoutedEventArgs e) => HelpDialog.Open(this);
 
     // ---------- 设置：点击齿轮按钮弹出设置对话框 ----------
     private void Settings_Click(object sender, RoutedEventArgs e)
@@ -340,6 +426,9 @@ public partial class MainWindow : Window
     private void NormalItem_Click(object sender, MouseButtonEventArgs e)
     {
         if (_vm == null) return;
+        // 双击时第二次点击（ClickCount=2）会落在已被第一条移除后补位上来的条目上，
+        // 若不拦截会连带吃掉队列里的下一条。仅响应单击。
+        if (e.ClickCount != 1) return;
         // 点击落在图钉/删除按钮上时不处理（按钮已吞掉 MouseLeftButtonDown）
         if (e.OriginalSource is DependencyObject d && FindAncestor<Button>(d) != null) return;
 
@@ -475,6 +564,74 @@ public partial class MainWindow : Window
         }
     }
 
+    // ---------- 窗口状态持久化 ----------
+
+    /// <summary>应用持久化的窗口位置/尺寸/置顶状态（在 Show 之前调用）。</summary>
+    public void ApplyPersistedWindowState(SettingsStorageService.SettingsDto settings)
+    {
+        Topmost = settings.IsTopmost;
+
+        if (settings.WindowLeft is not double left || settings.WindowTop is not double top)
+            return;
+
+        double width = settings.WindowWidth ?? Width;
+        double height = settings.WindowHeight ?? Height;
+
+        // 虚拟屏范围内收敛：从大屏保存的几何回到小屏时，保证标题栏仍可抓取
+        double virtualLeft = SystemParameters.VirtualScreenLeft;
+        double virtualTop = SystemParameters.VirtualScreenTop;
+        double virtualWidth = SystemParameters.VirtualScreenWidth;
+        double virtualHeight = SystemParameters.VirtualScreenHeight;
+        double virtualRight = virtualLeft + virtualWidth;
+        double virtualBottom = virtualTop + virtualHeight;
+
+        width = Math.Clamp(width, MinWidth, Math.Max(MinWidth, virtualWidth));
+        height = Math.Clamp(height, MinHeight, Math.Max(MinHeight, virtualHeight));
+        left = Math.Clamp(left, virtualLeft, Math.Max(virtualLeft, virtualRight - 100));
+        top = Math.Clamp(top, virtualTop, Math.Max(virtualTop, virtualBottom - 100));
+
+        WindowStartupLocation = WindowStartupLocation.Manual;
+        Left = left;
+        Top = top;
+        Width = width;
+        Height = height;
+    }
+
+    /// <summary>保存窗口几何与置顶状态（最大化/最小化时保存还原边界）。</summary>
+    private void SaveWindowState()
+    {
+        // 从未显示过（如 --minimized 静默启动后直接退出）时不写盘，避免覆盖有效位置
+        if (!IsLoaded) return;
+
+        Rect bounds = WindowState == WindowState.Normal
+            ? new Rect(Left, Top, Width, Height)
+            : RestoreBounds;
+
+        // 未变化时不写盘：隐藏/显示到托盘是高频操作
+        if (_hasSavedWindowState && bounds == _lastSavedBounds && Topmost == _lastSavedTopmost)
+            return;
+
+        _lastSavedBounds = bounds;
+        _lastSavedTopmost = Topmost;
+        _hasSavedWindowState = true;
+
+        SettingsStorageService.Update(s =>
+        {
+            s.WindowLeft = bounds.Left;
+            s.WindowTop = bounds.Top;
+            s.WindowWidth = bounds.Width;
+            s.WindowHeight = bounds.Height;
+            s.IsTopmost = Topmost;
+        });
+    }
+
+    /// <summary>托盘菜单切换窗口置顶并持久化。</summary>
+    public void SetTopmost(bool value)
+    {
+        Topmost = value;
+        SettingsStorageService.Update(s => s.IsTopmost = value);
+    }
+
     // ---------- 关闭→最小化到托盘（除非强制退出） ----------
     private void Window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
     {
@@ -482,7 +639,11 @@ public partial class MainWindow : Window
         if (app != null && !app.ForceExit)
         {
             e.Cancel = true;
-            Hide(); // 最小化到托盘
+            Hide(); // 最小化到托盘（Hide 内部会保存窗口状态）
+        }
+        else
+        {
+            SaveWindowState();
         }
     }
 

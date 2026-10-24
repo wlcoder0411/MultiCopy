@@ -53,4 +53,10 @@
     <!-- 重置序号（逆时针旋转箭头） -->
     <Geometry x:Key="IconReset">M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8M3 3v5h5</Geometry>
 
+    <!-- 撤销（回转箭头） -->
+    <Geometry x:Key="IconUndo">M9 14 4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 0 11H11</Geometry>
+
+    <!-- 帮助（圆圈问号） -->
+    <Geometry x:Key="IconHelp">M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3M12 17h.01</Geometry>
+
 </ResourceDictionary>

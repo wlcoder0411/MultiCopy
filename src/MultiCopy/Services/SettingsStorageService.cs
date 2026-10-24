@@ -48,6 +48,12 @@ public static class SettingsStorageService
             // 序号相关字段兜底（缺失时用默认值）
             if (dto.PrefixSequenceStart < 1) dto.PrefixSequenceStart = 1;
             if (dto.PrefixSequenceCurrent < 1) dto.PrefixSequenceCurrent = dto.PrefixSequenceStart;
+            // 窗口几何合法性兜底：尺寸过小视为无效，回退到 XAML 默认值
+            if (dto.WindowWidth is double w && w < 320) dto.WindowWidth = null;
+            if (dto.WindowHeight is double h && h < 360) dto.WindowHeight = null;
+            // 主题枚举越界兜底
+            if ((int)dto.Theme < (int)AppTheme.Dark || (int)dto.Theme > (int)AppTheme.Light)
+                dto.Theme = AppTheme.Dark;
             // 兼容旧版单选配置：检测到 pasteSuffixIsPostfix 字段时迁移
             MigrateLegacySettings(json, dto);
             return dto;
@@ -112,6 +118,17 @@ public static class SettingsStorageService
         }
     }
 
+    /// <summary>
+    /// 增量更新设置：读取现有配置 → 仅修改指定字段 → 原子写回。
+    /// 避免调用方自行 new 完整 DTO 导致未填字段被默认值覆盖。
+    /// </summary>
+    public static void Update(Action<SettingsDto> mutate)
+    {
+        var settings = Load();
+        mutate(settings);
+        Save(settings);
+    }
+
     /// <summary>持久化数据传输对象。</summary>
     public sealed class SettingsDto
     {
@@ -136,5 +153,19 @@ public static class SettingsStorageService
         public PrefixSequenceFormat PrefixSequenceFormat { get; set; } = PrefixSequenceFormat.Plain;
         /// <summary>序号与前缀内容的位置关系。</summary>
         public PrefixSequencePosition PrefixSequencePosition { get; set; } = PrefixSequencePosition.AfterPrefix;
+        /// <summary>界面主题（默认暗色）。</summary>
+        public AppTheme Theme { get; set; } = AppTheme.Dark;
+        /// <summary>窗口左边界（null=使用默认位置）。</summary>
+        public double? WindowLeft { get; set; }
+        /// <summary>窗口上边界（null=使用默认位置）。</summary>
+        public double? WindowTop { get; set; }
+        /// <summary>窗口宽度（null=使用默认宽度）。</summary>
+        public double? WindowWidth { get; set; }
+        /// <summary>窗口高度（null=使用默认高度）。</summary>
+        public double? WindowHeight { get; set; }
+        /// <summary>窗口是否置顶（默认开启）。</summary>
+        public bool IsTopmost { get; set; } = true;
+        /// <summary>是否已看过首次使用引导。</summary>
+        public bool HasSeenOnboarding { get; set; }
     }
 }

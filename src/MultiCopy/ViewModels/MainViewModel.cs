@@ -73,6 +73,39 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private string? _searchText;
 
+    /// <summary>键盘导航当前选中项（null=无选中）。</summary>
+    [ObservableProperty]
+    private ClipboardItem? _selectedItem;
+
+    /// <summary>容量指示文本（如 "18/30"）。</summary>
+    [ObservableProperty]
+    private string _capacityText = "0/30";
+
+    /// <summary>容量是否已达上限（用于警示色）。</summary>
+    [ObservableProperty]
+    private bool _isCapacityWarning;
+
+    /// <summary>是否存在可撤销的上一步操作（控制撤销按钮可用性）。</summary>
+    [ObservableProperty]
+    private bool _canUndo;
+
+    /// <summary>是否显示首次使用引导。</summary>
+    [ObservableProperty]
+    private bool _showOnboarding;
+
+    /// <summary>底部动态操作提示。</summary>
+    [ObservableProperty]
+    private string _operationHint = DefaultOperationHint;
+
+    private const string DefaultOperationHint =
+        "模式开：Ctrl+V 按序出队 · 窗口内：↑↓ 选择、Enter 粘贴、Ctrl+Z 撤销 · 点击此处查看全部快捷键";
+
+    private const string EmptyOperationHint =
+        "在任意应用 Ctrl+C 收集内容 · Alt+Z 随时调出 · 点击此处查看全部快捷键";
+
+    /// <summary>最近一次选择在可导航列表中的序号，用于出队后自动续选。</summary>
+    private int _selectedIndexHint;
+
     /// <summary>当前是否在搜索状态（SearchText 非空白）。</summary>
     public bool IsSearching => !string.IsNullOrWhiteSpace(SearchText);
 
@@ -119,7 +152,12 @@ public sealed partial class MainViewModel : ObservableObject
         => IsLightTheme = ThemeService.CurrentTheme == AppTheme.Light;
 
     [RelayCommand]
-    private void ToggleTheme() => ThemeService.Toggle();
+    private void ToggleTheme()
+    {
+        ThemeService.Toggle();
+        // 主题属于用户偏好，切换即持久化，避免每次启动回到暗色
+        SettingsStorageService.Update(s => s.Theme = ThemeService.CurrentTheme);
+    }
 
     // ObservableProperty 生成的 ModeOn setter 变化时同步回 AppState
     partial void OnModeOnChanged(bool value) => _state.ModeOn = value;
@@ -129,12 +167,14 @@ public sealed partial class MainViewModel : ObservableObject
 
     private void OnQueueChanged(object? sender, EventArgs e)
     {
-        UpdateStates();
         if (IsSearching)
         {
             // 入队/出队/移动后，组级别可见性可能变化（某组从无匹配→有匹配或反之），刷新 Groups 视图
             _groupsView.Refresh();
         }
+        // 先刷新视图再重算状态/序号，保证 GroupHasMatch 过滤后的可见集合正确
+        UpdateStates();
+        RestoreSelectionAfterChange();
     }
 
     /// <summary>新建分组时给其 Items 默认视图附加 Filter（仅搜索状态下需要）。</summary>
@@ -155,6 +195,8 @@ public sealed partial class MainViewModel : ObservableObject
     partial void OnSearchTextChanged(string? value)
     {
         ApplySearch();
+        // 选中项被搜索条件过滤掉时清除选择，避免对不可见项执行粘贴
+        EnsureSelectionVisible();
         OnPropertyChanged(nameof(IsSearching));
         OnPropertyChanged(nameof(SearchNoResult));
         UpdateStates();
@@ -240,10 +282,149 @@ public sealed partial class MainViewModel : ObservableObject
         PinnedEmpty = GetFilteredCount(PinnedItems) == 0;
         NormalEmpty = UngroupedEmpty && !AnyGroupHasFilteredMatch();
         AllEmpty = NormalEmpty && PinnedEmpty;
+        // 容量指示（口径与实际上限检查一致：NormalCount 排除置顶分组）
+        int normalCount = _queue.NormalCount;
+        CapacityText = $"{normalCount}/{AppState.MaxQueueItems}";
+        IsCapacityWarning = normalCount >= AppState.MaxQueueItems;
+        // 撤销按钮可用性
+        CanUndo = _queue.CanUndo;
+        // 底部动态提示：空队列→引导收集；有可撤销操作→提示撤销；否则常规快捷键
+        OperationHint = _queue.IsEmpty
+            ? EmptyOperationHint
+            : (CanUndo ? "可撤销上一步 · Ctrl+Z 撤销 · 点击此处查看全部快捷键" : DefaultOperationHint);
+        // 列表展示序号（置顶 → 未分组 → 各分组，连续编号）
+        RefreshDisplayIndexes();
         // 搜索专属属性刷新
         OnPropertyChanged(nameof(IsSearching));
         OnPropertyChanged(nameof(SearchNoResult));
     }
+
+    // ---------- 键盘导航 ----------
+
+    /// <summary>选中项变化时同步所有条目的高亮标记（含被移出队列的旧选中项，避免撤销后重复高亮）。</summary>
+    partial void OnSelectedItemChanged(ClipboardItem? oldValue, ClipboardItem? newValue)
+    {
+        if (oldValue != null)
+            oldValue.IsKeyboardSelected = false;
+
+        foreach (var item in AllItems())
+        {
+            if (!ReferenceEquals(item, newValue))
+                item.IsKeyboardSelected = false;
+        }
+        if (newValue != null)
+        {
+            newValue.IsKeyboardSelected = true;
+            // 同步续选提示索引，确保鼠标/撤销等非方向键来源的选择也能正确续选
+            int index = BuildNavigableList().IndexOf(newValue);
+            if (index >= 0) _selectedIndexHint = index;
+        }
+    }
+
+    private IEnumerable<ClipboardItem> AllItems()
+    {
+        foreach (var item in PinnedItems) yield return item;
+        foreach (var item in UngroupedItems) yield return item;
+        foreach (var g in Groups)
+            foreach (var item in g.Items)
+                yield return item;
+    }
+
+    /// <summary>
+    /// 构建键盘可导航列表（按视觉顺序）：置顶项 → 未分组项 → 各展开分组项。
+    /// 各段均通过集合视图枚举，天然尊重当前搜索过滤。
+    /// </summary>
+    private List<ClipboardItem> BuildNavigableList()
+    {
+        var list = new List<ClipboardItem>();
+
+        foreach (var obj in _pinnedView)
+            if (obj is ClipboardItem pinned) list.Add(pinned);
+
+        foreach (var obj in _ungroupedView)
+            if (obj is ClipboardItem ungrouped) list.Add(ungrouped);
+
+        foreach (var obj in _groupsView)
+        {
+            if (obj is not ClipboardGroup g || !g.IsExpanded) continue;
+            foreach (var itemObj in CollectionViewSource.GetDefaultView(g.Items))
+                if (itemObj is ClipboardItem item) list.Add(item);
+        }
+
+        return list;
+    }
+
+    /// <summary>
+    /// 按展示顺序为条目分配 1..N 的序号（置顶 → 未分组 → 各分组）。
+    /// 编号不随搜索过滤或分组折叠变化。
+    /// </summary>
+    private void RefreshDisplayIndexes()
+    {
+        int index = 1;
+        foreach (var item in _queue.EnumerateIndexedItems())
+        {
+            item.DisplayIndex = index++;
+        }
+    }
+
+    /// <summary>按方向移动键盘选择（delta=+1 向下，-1 向上）。</summary>
+    public void MoveSelection(int delta)
+    {
+        var list = BuildNavigableList();
+        if (list.Count == 0)
+        {
+            SelectedItem = null;
+            _selectedIndexHint = 0;
+            return;
+        }
+
+        int current = SelectedItem == null ? -1 : list.IndexOf(SelectedItem);
+        int next = current < 0
+            ? (delta > 0 ? 0 : list.Count - 1)
+            : Math.Clamp(current + delta, 0, list.Count - 1);
+
+        SelectedItem = list[next];
+        _selectedIndexHint = next;
+    }
+
+    /// <summary>选中项被粘贴/删除后，按原序号自动续选下一条，支持连续键盘操作。</summary>
+    private void RestoreSelectionAfterChange()
+    {
+        if (SelectedItem == null) return;
+        if (ContainsAnywhere(SelectedItem)) return;
+
+        var list = BuildNavigableList();
+        if (list.Count == 0)
+        {
+            SelectedItem = null;
+            _selectedIndexHint = 0;
+            return;
+        }
+
+        int index = Math.Clamp(_selectedIndexHint, 0, list.Count - 1);
+        SelectedItem = list[index];
+        _selectedIndexHint = index;
+    }
+
+    private bool ContainsAnywhere(ClipboardItem item)
+    {
+        if (PinnedItems.Contains(item) || UngroupedItems.Contains(item)) return true;
+        foreach (var g in Groups)
+            if (g.Items.Contains(item)) return true;
+        return false;
+    }
+
+    /// <summary>搜索/折叠变化后，若选中项已不可见则清除选择，避免对不可见项执行粘贴。</summary>
+    private void EnsureSelectionVisible()
+    {
+        if (SelectedItem == null) return;
+        if (BuildNavigableList().Contains(SelectedItem)) return;
+        SelectedItem = null;
+    }
+
+    /// <summary>该条目粘贴后是否保留：全局置顶项与置顶分组内的项均保留。</summary>
+    public bool IsKeepAfterPaste(ClipboardItem item)
+        => item.IsPinned || _queue.Groups.Any(g => g.IsPinned && g.Items.Contains(item));
 
     /// <summary>刷新各分组的 IsActiveGroup 标记（UI 高亮用）。</summary>
     private void RefreshActiveGroupFlags()
@@ -296,6 +477,23 @@ public sealed partial class MainViewModel : ObservableObject
     [RelayCommand]
     private void ClearAll() => _queue.ClearAll();
 
+    /// <summary>撤销最近一次粘贴出队或删除（最多回退 8 步），并高亮被恢复的条目。</summary>
+    [RelayCommand]
+    private void UndoLastRemoval()
+    {
+        var restored = _queue.UndoLastRemoval();
+        if (restored != null)
+            SelectedItem = restored;
+    }
+
+    /// <summary>关闭首次使用引导，并持久化「已看过」标记。</summary>
+    [RelayCommand]
+    private void DismissOnboarding()
+    {
+        ShowOnboarding = false;
+        SettingsStorageService.Update(s => s.HasSeenOnboarding = true);
+    }
+
     // ---------- 分组命令 ----------
 
     [RelayCommand]
@@ -347,6 +545,10 @@ public sealed partial class MainViewModel : ObservableObject
     private void ToggleGroupExpand(ClipboardGroup? g)
     {
         if (g != null) g.IsExpanded = !g.IsExpanded;
+        // 折叠后选中项可能被隐藏，清掉以免 Enter 粘到不可见项
+        EnsureSelectionVisible();
+        // 折叠/展开会改变可见条目集合，序号需重排
+        RefreshDisplayIndexes();
     }
 
     [RelayCommand]

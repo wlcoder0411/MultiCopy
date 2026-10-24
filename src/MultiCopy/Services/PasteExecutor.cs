@@ -64,7 +64,7 @@ public sealed class PasteExecutor
             // 受低级钩子 300ms 超时限制，且物理按键时序天然正确，无需延迟。
             System.Threading.Thread.Sleep(50);
 
-            injected = SendCtrlV();
+            injected = Win32.SendCtrlV();
         }
         finally
         {
@@ -79,35 +79,4 @@ public sealed class PasteExecutor
             queue.RemoveNormal(item);
         }
     }
-
-    /// <summary>
-    /// 预构建的 Ctrl+V 输入序列（Ctrl down → V down → V up → Ctrl up）。
-    /// 内容固定不变，静态化避免每次点选粘贴重复分配 INPUT[4]（160B）。
-    /// SendInput 只读消费此数组，不会修改。
-    /// </summary>
-    private static readonly INPUT[] _ctrlVInputs = BuildCtrlVInputs();
-
-    private static INPUT[] BuildCtrlVInputs()
-    {
-        var inputs = new INPUT[4];
-        // Ctrl 按下
-        inputs[0].Type = Constants.INPUT_KEYBOARD;
-        inputs[0].U.Ki.WVk = (ushort)Constants.VK_CONTROL;
-        // V 按下
-        inputs[1].Type = Constants.INPUT_KEYBOARD;
-        inputs[1].U.Ki.WVk = (ushort)Constants.VK_V;
-        // V 抬起
-        inputs[2].Type = Constants.INPUT_KEYBOARD;
-        inputs[2].U.Ki.WVk = (ushort)Constants.VK_V;
-        inputs[2].U.Ki.DwFlags = Constants.KEYEVENTF_KEYUP;
-        // Ctrl 抬起
-        inputs[3].Type = Constants.INPUT_KEYBOARD;
-        inputs[3].U.Ki.WVk = (ushort)Constants.VK_CONTROL;
-        inputs[3].U.Ki.DwFlags = Constants.KEYEVENTF_KEYUP;
-        return inputs;
-    }
-
-    /// <summary>注入 Ctrl+V。返回是否全部事件注入成功（false=被 UIPI 等阻止，粘贴不会送达）。</summary>
-    private static bool SendCtrlV()
-        => Win32.SendInput((uint)_ctrlVInputs.Length, _ctrlVInputs, INPUT.Size) == (uint)_ctrlVInputs.Length;
 }

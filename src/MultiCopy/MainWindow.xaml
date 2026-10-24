@@ -15,7 +15,6 @@
         Foreground="{DynamicResource ForegroundBrush}"
         Closing="Window_Closing">
     <Window.Resources>
-        <infra:AlternationIndexConverter x:Key="IdxConv" />
         <BooleanToVisibilityConverter x:Key="Bool2Vis" />
 
         <!-- 普通项：单击粘贴并移除（扁平区/未分组区/分组内均复用） -->
@@ -23,6 +22,7 @@
             <Border x:Name="card" Margin="8,3" Padding="8,6"
                     Background="{DynamicResource CardBackgroundBrush}" CornerRadius="6"
                     Cursor="Hand"
+                    infra:BringIntoViewBehavior.IsSelected="{Binding IsKeyboardSelected}"
                     MouseLeftButtonDown="NormalItem_Click"
                     Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType=Window}}">
                 <Border.ContextMenu>
@@ -48,11 +48,10 @@
                     </Grid.ColumnDefinitions>
 
                     <TextBlock Grid.Column="0" VerticalAlignment="Center"
+                               HorizontalAlignment="Center"
                                Foreground="{DynamicResource ForegroundDimBrush}"
                                FontSize="{StaticResource FontSizeCaption}"
-                               Text="{Binding (ItemsControl.AlternationIndex),
-                                      RelativeSource={RelativeSource AncestorType=ContentPresenter},
-                                      Converter={StaticResource IdxConv}}" />
+                               Text="{Binding DisplayIndex}" />
 
                     <TextBlock Grid.Column="1" VerticalAlignment="Center" Margin="4,0,8,0"
                                Text="{Binding Preview}" ToolTip="{Binding Text}"
@@ -76,6 +75,12 @@
                 <Trigger SourceName="card" Property="IsMouseOver" Value="True">
                     <Setter TargetName="card" Property="Background" Value="{DynamicResource CardBackgroundHoverBrush}" />
                 </Trigger>
+                <!-- 键盘导航选中态：高亮背景 + 左侧强调边 -->
+                <DataTrigger Binding="{Binding IsKeyboardSelected}" Value="True">
+                    <Setter TargetName="card" Property="Background" Value="{DynamicResource AccentBackgroundBrush}" />
+                    <Setter TargetName="card" Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                    <Setter TargetName="card" Property="BorderThickness" Value="2,0,0,0" />
+                </DataTrigger>
             </DataTemplate.Triggers>
         </DataTemplate>
 
@@ -85,6 +90,7 @@
                     Background="{DynamicResource PinBackgroundBrush}" CornerRadius="6"
                     BorderBrush="{DynamicResource PinBrush}" BorderThickness="2,0,0,0"
                     Cursor="Hand"
+                    infra:BringIntoViewBehavior.IsSelected="{Binding IsKeyboardSelected}"
                     MouseLeftButtonDown="PinnedItem_DoubleClick">
                 <Grid>
                     <Grid.ColumnDefinitions>
@@ -94,11 +100,10 @@
                     </Grid.ColumnDefinitions>
 
                     <TextBlock Grid.Column="0" VerticalAlignment="Center"
+                               HorizontalAlignment="Center"
                                Foreground="{DynamicResource PinBrush}"
                                FontSize="{StaticResource FontSizeCaption}"
-                               Text="{Binding (ItemsControl.AlternationIndex),
-                                      RelativeSource={RelativeSource AncestorType=ContentPresenter},
-                                      Converter={StaticResource IdxConv}}" />
+                               Text="{Binding DisplayIndex}" />
 
                     <TextBlock Grid.Column="1" VerticalAlignment="Center" Margin="4,0,8,0"
                                Text="{Binding Preview}" ToolTip="双击粘贴（保留）"
@@ -123,6 +128,12 @@
                 <Trigger SourceName="card" Property="IsMouseOver" Value="True">
                     <Setter TargetName="card" Property="Background" Value="{DynamicResource PinBackgroundHoverBrush}" />
                 </Trigger>
+                <!-- 键盘导航选中态：高亮背景 + 左侧强调边 -->
+                <DataTrigger Binding="{Binding IsKeyboardSelected}" Value="True">
+                    <Setter TargetName="card" Property="Background" Value="{DynamicResource AccentBackgroundBrush}" />
+                    <Setter TargetName="card" Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                    <Setter TargetName="card" Property="BorderThickness" Value="2,0,0,0" />
+                </DataTrigger>
             </DataTemplate.Triggers>
         </DataTemplate>
 
@@ -131,6 +142,7 @@
             <Border x:Name="card" Margin="8,3" Padding="8,6"
                     Background="{DynamicResource CardBackgroundBrush}" CornerRadius="6"
                     Cursor="Hand"
+                    infra:BringIntoViewBehavior.IsSelected="{Binding IsKeyboardSelected}"
                     MouseLeftButtonDown="NormalItem_Click"
                     Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType=Window}}">
                 <Border.ContextMenu>
@@ -156,11 +168,10 @@
 
                     <!-- 序号（与 NormalItemTemplate 一致） -->
                     <TextBlock Grid.Column="0" VerticalAlignment="Center"
+                               HorizontalAlignment="Center"
                                Foreground="{DynamicResource ForegroundDimBrush}"
                                FontSize="{StaticResource FontSizeCaption}"
-                               Text="{Binding (ItemsControl.AlternationIndex),
-                                      RelativeSource={RelativeSource AncestorType=ContentPresenter},
-                                      Converter={StaticResource IdxConv}}" />
+                               Text="{Binding DisplayIndex}" />
 
                     <!-- 96×96 缩略图（Border 固定背景色，防亮色主题透白边；UniformToFill 居中裁剪） -->
                     <Border Grid.Column="1" Width="96" Height="96" Margin="4,0"
@@ -198,6 +209,12 @@
                 <Trigger SourceName="card" Property="IsMouseOver" Value="True">
                     <Setter TargetName="card" Property="Background" Value="{DynamicResource CardBackgroundHoverBrush}" />
                 </Trigger>
+                <!-- 键盘导航选中态：高亮背景 + 左侧强调边 -->
+                <DataTrigger Binding="{Binding IsKeyboardSelected}" Value="True">
+                    <Setter TargetName="card" Property="Background" Value="{DynamicResource AccentBackgroundBrush}" />
+                    <Setter TargetName="card" Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                    <Setter TargetName="card" Property="BorderThickness" Value="2,0,0,0" />
+                </DataTrigger>
             </DataTemplate.Triggers>
         </DataTemplate>
 
@@ -207,6 +224,7 @@
                     Background="{DynamicResource PinBackgroundBrush}" CornerRadius="6"
                     BorderBrush="{DynamicResource PinBrush}" BorderThickness="2,0,0,0"
                     Cursor="Hand"
+                    infra:BringIntoViewBehavior.IsSelected="{Binding IsKeyboardSelected}"
                     MouseLeftButtonDown="PinnedItem_DoubleClick">
                 <Grid>
                     <Grid.ColumnDefinitions>
@@ -218,11 +236,10 @@
 
                     <!-- 序号（与 PinnedItemTemplate 一致，PinBrush 色） -->
                     <TextBlock Grid.Column="0" VerticalAlignment="Center"
+                               HorizontalAlignment="Center"
                                Foreground="{DynamicResource PinBrush}"
                                FontSize="{StaticResource FontSizeCaption}"
-                               Text="{Binding (ItemsControl.AlternationIndex),
-                                      RelativeSource={RelativeSource AncestorType=ContentPresenter},
-                                      Converter={StaticResource IdxConv}}" />
+                               Text="{Binding DisplayIndex}" />
 
                     <!-- 96×96 缩略图 -->
                     <Border Grid.Column="1" Width="96" Height="96" Margin="4,0"
@@ -262,6 +279,12 @@
                 <Trigger SourceName="card" Property="IsMouseOver" Value="True">
                     <Setter TargetName="card" Property="Background" Value="{DynamicResource PinBackgroundHoverBrush}" />
                 </Trigger>
+                <!-- 键盘导航选中态：高亮背景 + 左侧强调边 -->
+                <DataTrigger Binding="{Binding IsKeyboardSelected}" Value="True">
+                    <Setter TargetName="card" Property="Background" Value="{DynamicResource AccentBackgroundBrush}" />
+                    <Setter TargetName="card" Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                    <Setter TargetName="card" Property="BorderThickness" Value="2,0,0,0" />
+                </DataTrigger>
             </DataTemplate.Triggers>
         </DataTemplate>
 
@@ -273,6 +296,7 @@
                     Background="{DynamicResource PinBackgroundBrush}" CornerRadius="6"
                     BorderBrush="{DynamicResource PinBrush}" BorderThickness="2,0,0,0"
                     Cursor="Hand"
+                    infra:BringIntoViewBehavior.IsSelected="{Binding IsKeyboardSelected}"
                     MouseLeftButtonDown="PinnedItem_DoubleClick">
                 <Grid>
                     <Grid.ColumnDefinitions>
@@ -282,11 +306,10 @@
                     </Grid.ColumnDefinitions>
 
                     <TextBlock Grid.Column="0" VerticalAlignment="Center"
+                               HorizontalAlignment="Center"
                                Foreground="{DynamicResource PinBrush}"
                                FontSize="{StaticResource FontSizeCaption}"
-                               Text="{Binding (ItemsControl.AlternationIndex),
-                                      RelativeSource={RelativeSource AncestorType=ContentPresenter},
-                                      Converter={StaticResource IdxConv}}" />
+                               Text="{Binding DisplayIndex}" />
 
                     <TextBlock Grid.Column="1" VerticalAlignment="Center" Margin="4,0,8,0"
                                Text="{Binding Preview}" ToolTip="双击粘贴（保留）"
@@ -305,6 +328,12 @@
                 <Trigger SourceName="card" Property="IsMouseOver" Value="True">
                     <Setter TargetName="card" Property="Background" Value="{DynamicResource PinBackgroundHoverBrush}" />
                 </Trigger>
+                <!-- 键盘导航选中态：高亮背景 + 左侧强调边 -->
+                <DataTrigger Binding="{Binding IsKeyboardSelected}" Value="True">
+                    <Setter TargetName="card" Property="Background" Value="{DynamicResource AccentBackgroundBrush}" />
+                    <Setter TargetName="card" Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                    <Setter TargetName="card" Property="BorderThickness" Value="2,0,0,0" />
+                </DataTrigger>
             </DataTemplate.Triggers>
         </DataTemplate>
 
@@ -314,6 +343,7 @@
                     Background="{DynamicResource PinBackgroundBrush}" CornerRadius="6"
                     BorderBrush="{DynamicResource PinBrush}" BorderThickness="2,0,0,0"
                     Cursor="Hand"
+                    infra:BringIntoViewBehavior.IsSelected="{Binding IsKeyboardSelected}"
                     MouseLeftButtonDown="PinnedItem_DoubleClick">
                 <Grid>
                     <Grid.ColumnDefinitions>
@@ -324,11 +354,10 @@
                     </Grid.ColumnDefinitions>
 
                     <TextBlock Grid.Column="0" VerticalAlignment="Center"
+                               HorizontalAlignment="Center"
                                Foreground="{DynamicResource PinBrush}"
                                FontSize="{StaticResource FontSizeCaption}"
-                               Text="{Binding (ItemsControl.AlternationIndex),
-                                      RelativeSource={RelativeSource AncestorType=ContentPresenter},
-                                      Converter={StaticResource IdxConv}}" />
+                               Text="{Binding DisplayIndex}" />
 
                     <Border Grid.Column="1" Width="96" Height="96" Margin="4,0"
                             Background="{DynamicResource ThumbnailBackgroundBrush}"
@@ -359,6 +388,12 @@
                 <Trigger SourceName="card" Property="IsMouseOver" Value="True">
                     <Setter TargetName="card" Property="Background" Value="{DynamicResource PinBackgroundHoverBrush}" />
                 </Trigger>
+                <!-- 键盘导航选中态：高亮背景 + 左侧强调边 -->
+                <DataTrigger Binding="{Binding IsKeyboardSelected}" Value="True">
+                    <Setter TargetName="card" Property="Background" Value="{DynamicResource AccentBackgroundBrush}" />
+                    <Setter TargetName="card" Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                    <Setter TargetName="card" Property="BorderThickness" Value="2,0,0,0" />
+                </DataTrigger>
             </DataTemplate.Triggers>
         </DataTemplate>
 
@@ -520,6 +555,21 @@
                   Data="{StaticResource IconHeart}" VerticalAlignment="Center"
                   Cursor="Hand" MouseLeftButtonDown="SupportAuthor_Click"
                   Fill="{DynamicResource AccentBrush}" Stroke="{DynamicResource AccentBrush}"/>
+            <!-- 容量指示：达到上限时转为警示色 -->
+            <TextBlock DockPanel.Dock="Left" Margin="6,0,0,0" VerticalAlignment="Center"
+                       FontSize="{StaticResource FontSizeCaption}"
+                       Text="{Binding CapacityText}">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                        <Setter Property="Foreground" Value="{DynamicResource ForegroundDimBrush}" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsCapacityWarning}" Value="True">
+                                <Setter Property="Foreground" Value="{DynamicResource PinBrush}" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
                 <!-- 监控开关（眼睛图标，开=睁眼，关=闭眼） -->
                 <ToggleButton Style="{StaticResource GhostToggleButton}" ToolTip="监控剪贴板开关"
@@ -589,7 +639,7 @@
                       Data="{StaticResource IconSearch}" Margin="8,0,6,0"/>
                 <TextBox Grid.Column="1" x:Name="SearchBox"
                          Style="{StaticResource SearchTextBoxStyle}"
-                         Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged, Delay=150}"
+                         Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
                          Tag="搜索复制内容…"
                          GotFocus="SearchBox_GotFocus"
                          LostFocus="SearchBox_LostFocus" />
@@ -607,6 +657,35 @@
         <Grid Grid.Row="2">
             <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,4">
                 <StackPanel>
+                    <!-- 首次使用引导：只在没见过时显示一次 -->
+                    <Border Margin="8,6,8,2" Padding="12,10" CornerRadius="8"
+                            Background="{DynamicResource AccentBackgroundBrush}"
+                            BorderBrush="{DynamicResource AccentBrush}" BorderThickness="1,0,0,0"
+                            Visibility="{Binding ShowOnboarding, Converter={StaticResource Bool2Vis}}">
+                        <StackPanel>
+                            <TextBlock Text="欢迎使用 MultiCopy"
+                                       FontWeight="SemiBold" FontSize="{StaticResource FontSizeTitle}" />
+                            <TextBlock Margin="0,6,0,0" TextWrapping="Wrap" LineHeight="19"
+                                       FontSize="{StaticResource FontSizeCaption}"
+                                       Foreground="{DynamicResource ForegroundBrush}">
+                                <Run Text="① 在任意应用 Ctrl+C 复制，内容会自动进入队列" /><LineBreak />
+                                <Run Text="② 按 Alt+Z 随时调出本窗口" /><LineBreak />
+                                <Run Text="③ 窗口内 ↑↓ 选择，Enter 粘贴" />
+                            </TextBlock>
+                            <TextBlock Margin="0,6,0,0" TextWrapping="Wrap"
+                                       FontSize="{StaticResource FontSizeCaption}"
+                                       Foreground="{DynamicResource PinBrush}"
+                                       Text="注意：Ctrl+Z 与方向键仅在 MultiCopy 窗口内生效；窗口隐藏到托盘时监控暂停。" />
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
+                                <Button Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"
+                                        Padding="12,4" Content="查看全部快捷键"
+                                        Click="OpenHelp_Click" />
+                                <Button Style="{StaticResource PrimaryButton}" Padding="14,4"
+                                        Content="知道了，开始使用"
+                                        Command="{Binding DismissOnboardingCommand}" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
                     <!-- 置顶区（始终在最上，不受分组影响） -->
                     <StackPanel Visibility="{Binding PinnedEmpty, Converter={x:Static infra:InverseBoolToVisibilityConverter.Instance}, Mode=OneWay}">
                         <StackPanel Orientation="Horizontal" Margin="12,8,0,2">
@@ -714,14 +793,23 @@
             </ScrollViewer>
         </Grid>
 
-        <!-- 底部提示 -->
-        <Border Grid.Row="3" Background="{DynamicResource CardBackgroundBrush}" Padding="12,8">
-            <TextBlock FontSize="{StaticResource FontSizeCaption}"
-                       Foreground="{DynamicResource ForegroundDimBrush}" TextWrapping="Wrap">
-                <Run Text="模式开：Ctrl+V 按序出队 · 选中分组时仅出该分组 · 按住 Shift 临时用普通粘贴" />
-                <LineBreak />
-                <Run Text="单击普通项粘贴 · 双击置顶项粘贴(保留) · 搜索框输入即过滤 · Esc 清空搜索" />
-            </TextBlock>
+        <!-- 底部操作提示：动态文案 + 可见的撤销按钮；点击空白处打开快捷键说明 -->
+        <Border Grid.Row="3" Background="{DynamicResource CardBackgroundBrush}" Padding="12,6"
+                Cursor="Hand" ToolTip="点击查看全部快捷键"
+                MouseLeftButtonDown="Help_Click">
+            <DockPanel>
+                <Button DockPanel.Dock="Right" Style="{StaticResource GhostButton}" Padding="4"
+                        Margin="6,0,0,0" VerticalAlignment="Center"
+                        ToolTip="撤销上一步（Ctrl+Z）"
+                        IsEnabled="{Binding CanUndo}"
+                        Command="{Binding UndoLastRemovalCommand}">
+                    <Path Style="{StaticResource IconStyle}" Data="{StaticResource IconUndo}"/>
+                </Button>
+                <TextBlock FontSize="{StaticResource FontSizeCaption}"
+                           Foreground="{DynamicResource ForegroundDimBrush}" TextWrapping="Wrap"
+                           VerticalAlignment="Center"
+                           Text="{Binding OperationHint}" />
+            </DockPanel>
         </Border>
     </Grid>
 </Window>

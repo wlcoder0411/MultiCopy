@@ -119,12 +119,97 @@ public sealed class ClipboardQueue
     /// <summary>移除指定普通项（点选粘贴 / Dequeue 共用）。跨所有集合查找移除。</summary>
     public bool RemoveNormal(ClipboardItem item)
     {
-        if (UngroupedItems.Remove(item)) { OnChanged(); return true; }
+        int index = UngroupedItems.IndexOf(item);
+        if (index >= 0)
+        {
+            UngroupedItems.RemoveAt(index);
+            RecordRemoval(item, null, index, wasPinned: false);
+            OnChanged();
+            return true;
+        }
         foreach (var g in Groups)
         {
-            if (g.Items.Remove(item)) { OnChanged(); return true; }
+            index = g.Items.IndexOf(item);
+            if (index >= 0)
+            {
+                g.Items.RemoveAt(index);
+                RecordRemoval(item, g, index, wasPinned: false);
+                OnChanged();
+                return true;
+            }
         }
         return false;
+    }
+
+    // ---------- 撤销最近一次移除 ----------
+
+    private sealed record RemovalRecord(ClipboardItem Item, ClipboardGroup? Group, int Index, bool WasPinned);
+
+    private const int MaxRemovalRecords = 8;
+    private readonly List<RemovalRecord> _recentRemovals = new(MaxRemovalRecords);
+
+    private void RecordRemoval(ClipboardItem item, ClipboardGroup? group, int index, bool wasPinned)
+    {
+        _recentRemovals.Add(new RemovalRecord(item, group, index, wasPinned));
+        if (_recentRemovals.Count > MaxRemovalRecords)
+            _recentRemovals.RemoveRange(0, _recentRemovals.Count - MaxRemovalRecords);
+    }
+
+    /// <summary>是否存在可撤销的移除记录（供 UI 撤销按钮可用性绑定）。</summary>
+    public bool CanUndo => _recentRemovals.Count > 0;
+
+    /// <summary>清空撤销栈：批量清空/删除分组后，不允许 Ctrl+Z 把无关旧项倒灌回队列。</summary>
+    private void ClearRemovalHistory() => _recentRemovals.Clear();
+
+    /// <summary>
+    /// 撤销最近一次移除（粘贴出队或删除），恢复到原集合的原索引位置。
+    /// 分组已不存在时回退到未分组。返回被恢复的项；无记录或项已存在时返回 null。
+    /// </summary>
+    public ClipboardItem? UndoLastRemoval()
+    {
+        if (_recentRemovals.Count == 0) return null;
+
+        var record = _recentRemovals[^1];
+        _recentRemovals.RemoveAt(_recentRemovals.Count - 1);
+
+        // 已被重新加入则视为无需撤销，避免重复插入
+        if (PinnedItems.Contains(record.Item)
+            || UngroupedItems.Contains(record.Item)
+            || Groups.Any(g => g.Items.Contains(record.Item)))
+            return null;
+
+        if (record.WasPinned)
+        {
+            int pinnedIndex = Math.Clamp(record.Index, 0, PinnedItems.Count);
+            record.Item.IsPinned = true;
+            PinnedItems.Insert(pinnedIndex, record.Item);
+        }
+        else if (record.Group != null && Groups.Contains(record.Group))
+        {
+            int index = Math.Clamp(record.Index, 0, record.Group.Items.Count);
+            record.Group.Items.Insert(index, record.Item);
+        }
+        else
+        {
+            int index = Math.Clamp(record.Index, 0, UngroupedItems.Count);
+            UngroupedItems.Insert(index, record.Item);
+        }
+
+        OnChanged();
+        return record.Item;
+    }
+
+    /// <summary>
+    /// 按界面展示顺序枚举条目：置顶 → 未分组 → 各分组（分组顺序）。
+    /// 用于给列表左侧分配连续编号，不随搜索过滤或分组折叠变化。
+    /// </summary>
+    public IEnumerable<ClipboardItem> EnumerateIndexedItems()
+    {
+        foreach (var item in PinnedItems) yield return item;
+        foreach (var item in UngroupedItems) yield return item;
+        foreach (var g in Groups)
+            foreach (var item in g.Items)
+                yield return item;
     }
 
     /// <summary>查询项当前所属分组 Id（null=未分组或不属于任何集合）。</summary>
@@ -213,7 +298,12 @@ public sealed class ClipboardQueue
 
     public void RemovePinned(ClipboardItem item)
     {
-        if (PinnedItems.Remove(item)) OnChanged();
+        int index = PinnedItems.IndexOf(item);
+        if (index < 0) return;
+        PinnedItems.RemoveAt(index);
+        // 置顶项删除也可撤销：记录 WasPinned，撤销时插回置顶集合
+        RecordRemoval(item, null, index, wasPinned: true);
+        OnChanged();
     }
 
     // ---------- 清空 ----------
@@ -228,6 +318,8 @@ public sealed class ClipboardQueue
             if (g.Items.Count > 0) changed = true;
             g.Items.Clear();
         }
+        // 批量清空后不再允许撤销更早的单条移除，避免把无关内容倒灌回来
+        ClearRemovalHistory();
         if (changed) OnChanged();
     }
 
@@ -236,6 +328,7 @@ public sealed class ClipboardQueue
         UngroupedItems.Clear();
         foreach (var g in Groups) g.Items.Clear();
         PinnedItems.Clear();
+        ClearRemovalHistory();
         OnChanged();
     }
 
@@ -266,6 +359,7 @@ public sealed class ClipboardQueue
         }
         g.Items.Clear();
         Groups.Remove(g);
+        ClearRemovalHistory();
         OnChanged();
     }
 
@@ -273,6 +367,7 @@ public sealed class ClipboardQueue
     {
         if (!Groups.Contains(g)) return;
         g.Items.Clear();
+        ClearRemovalHistory();
         OnChanged();
     }
 

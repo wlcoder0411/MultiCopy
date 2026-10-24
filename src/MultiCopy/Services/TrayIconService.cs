@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Threading;
 using Hardcodet.Wpf.TaskbarNotification;
 using Microsoft.Win32;
 using MultiCopy.Infrastructure;
@@ -26,6 +27,8 @@ public sealed class TrayIconService : IDisposable
     private MenuItem? _miMonitor;    // 监控菜单项
     private MenuItem? _miAutoStart;  // 开机自启菜单项
     private MenuItem? _miSettings;   // 设置菜单项
+    private MenuItem? _miTopmost;    // 窗口置顶菜单项
+    private DispatcherTimer? _autoStartRecheckTimer; // 自启项写入后的延迟复核（部分守护程序会异步清除）
 
     private const string RunKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
     private const string AppName = "MultiCopy";
@@ -47,6 +50,9 @@ public sealed class TrayIconService : IDisposable
         _tray.TrayMouseDoubleClick += (_, _) => ToggleWindowVisibility();
         // 先读注册表再建菜单：BuildMenu 中 miAutoStart.IsChecked 依赖 _autoStart 字段
         _autoStart = ReadAutoStart();
+        // 延迟复核用的定时器：自启项写入成功后稍后再回读一次，捕获被守护程序异步清除的情况
+        _autoStartRecheckTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
+        _autoStartRecheckTimer.Tick += OnAutoStartRecheckTick;
         _tray.ContextMenu = BuildMenu();
 
         _state.ModeChanged += OnModeChanged;
@@ -67,6 +73,11 @@ public sealed class TrayIconService : IDisposable
         miShow.Click += (_, _) => ToggleWindowVisibility();
         menu.Items.Add(miShow);
 
+        // 窗口置顶开关（状态持久化由 MainWindow.SetTopmost 负责）
+        _miTopmost = new MenuItem { Header = "窗口置顶(_P)", IsCheckable = true, IsChecked = _window.Topmost };
+        _miTopmost.Click += (_, _) => _window.SetTopmost(_miTopmost.IsChecked);
+        menu.Items.Add(_miTopmost);
+
         menu.Items.Add(new Separator());
 
         _miMode = new MenuItem { Header = "切换队列粘贴模式(_M)", IsCheckable = true, IsChecked = _state.ModeOn };
@@ -84,11 +95,7 @@ public sealed class TrayIconService : IDisposable
         menu.Items.Add(new Separator());
 
         _miAutoStart = new MenuItem { Header = "开机自启(_A)", IsCheckable = true, IsChecked = _autoStart };
-        _miAutoStart.Click += (_, _) =>
-        {
-            _autoStart = _miAutoStart.IsChecked;
-            SetAutoStart(_autoStart);
-        };
+        _miAutoStart.Click += (_, _) => ToggleAutoStart();
         menu.Items.Add(_miAutoStart);
 
         menu.Items.Add(new Separator());
@@ -97,6 +104,11 @@ public sealed class TrayIconService : IDisposable
         _miSettings = new MenuItem { Header = "设置(_T)" };
         _miSettings.Click += (_, _) => OpenSettings();
         menu.Items.Add(_miSettings);
+
+        // 使用说明：解释全局快捷键与窗口内快捷键的生效前提
+        var miHelp = new MenuItem { Header = "使用说明(_H)" };
+        miHelp.Click += (_, _) => HelpDialog.Open(_window.IsVisible ? _window : null);
+        menu.Items.Add(miHelp);
 
         menu.Items.Add(new Separator());
 
@@ -175,15 +187,69 @@ public sealed class TrayIconService : IDisposable
     private void ToggleWindowVisibility()
     {
         if (_window.IsVisible)
+        {
             _window.Hide();
+        }
         else
         {
-            _window.Show();
-            _window.Activate();
+            // 复用快捷键的显示逻辑：移除 WS_EX_NOACTIVATE 并聚焦搜索框，
+            // 否则从托盘调出的窗口无法接收键盘输入（方向键、搜索都会失效）。
+            _window.BringUpAndFocusSearch();
         }
     }
 
     // ---------- 开机自启 ----------
+
+    /// <summary>
+    /// 切换开机自启：写入后回读校验，以实际结果为准同步菜单勾选态，失败时给出明确提示。
+    /// 不做校验的话，注册表写入被系统/安全软件静默拦截时会静默失败——用户以为已开启，
+    /// 实际每次开机都不会启动（本地实测：名为 MultiCopy 的自启项会被第三方守护程序清除）。
+    /// </summary>
+    private void ToggleAutoStart()
+    {
+        if (_miAutoStart == null) return;
+
+        bool want = _miAutoStart.IsChecked;
+        bool applied = SetAutoStart(want);
+
+        // 以实际结果同步 UI，避免"勾选了却没生效"的假象
+        _autoStart = applied ? want : !want;
+        _miAutoStart.IsChecked = _autoStart;
+
+        if (!applied)
+        {
+            ShowBalloon("开机自启设置失败",
+                "自启项写入注册表后被系统或其他软件清除。请在「联想电脑管家 / 支付宝安全组件」等工具中允许 MultiCopy 开机自启。",
+                BalloonIcon.Warning);
+        }
+        else if (want)
+        {
+            // 写入成功；部分守护程序会在稍后异步清除，延迟复核一次
+            _autoStartRecheckTimer?.Stop();
+            _autoStartRecheckTimer?.Start();
+        }
+    }
+
+    /// <summary>延迟复核：确认刚写入的自启项是否仍在（被守护程序异步清除时提示用户）。</summary>
+    private void OnAutoStartRecheckTick(object? sender, EventArgs e)
+    {
+        _autoStartRecheckTimer?.Stop();
+        // 期间用户已把自启关掉时，项不存在是正常的，不误报
+        if (!_autoStart) return;
+        if (IsAutoStartEntryPresent()) return;
+
+        _autoStart = false;
+        if (_miAutoStart != null) _miAutoStart.IsChecked = false;
+        ShowBalloon("开机自启已被清除",
+            "自启项写入后又被系统或其他软件清除（如联想电脑管家 / 支付宝安全组件）。请在对应工具中允许 MultiCopy 开机自启。",
+            BalloonIcon.Warning);
+    }
+
+    /// <summary>显示气泡提示（标题 + 正文 + 图标）。</summary>
+    private void ShowBalloon(string title, string text, BalloonIcon icon)
+        => _tray?.ShowBalloonTip(title, text, icon);
+
+    /// <summary>读取当前是否已存在开机自启项；并把旧格式值（缺 --minimized）补全为新格式。</summary>
     private static bool ReadAutoStart()
     {
         try
@@ -204,26 +270,48 @@ public sealed class TrayIconService : IDisposable
         }
     }
 
-    private static void SetAutoStart(bool enable)
+    /// <summary>
+    /// 写入/删除开机自启注册表项，并在操作后回读校验。
+    /// 返回是否达到期望状态（true=写入后确实存在 / 删除后确实不存在）。
+    /// </summary>
+    private static bool SetAutoStart(bool enable)
     {
         try
         {
-            using var key = Registry.CurrentUser.CreateSubKey(RunKeyPath, writable: true);
-            if (key == null) return;
-            if (enable)
+            using (var key = Registry.CurrentUser.CreateSubKey(RunKeyPath, writable: true))
             {
-                string exePath = Environment.ProcessPath
-                    ?? System.IO.Path.Combine(AppContext.BaseDirectory, AppName + ".exe");
-                key.SetValue(AppName, $"\"{exePath}\" --minimized");
+                if (key == null) return false;
+                if (enable)
+                {
+                    string exePath = Environment.ProcessPath
+                        ?? System.IO.Path.Combine(AppContext.BaseDirectory, AppName + ".exe");
+                    key.SetValue(AppName, $"\"{exePath}\" --minimized");
+                }
+                else
+                {
+                    key.DeleteValue(AppName, false);
+                }
             }
-            else
-            {
-                key.DeleteValue(AppName, false);
-            }
+            // 回读校验：注册表写入可能被安全软件静默拦截/回滚，不校验就会静默失败
+            return IsAutoStartEntryPresent() == enable;
         }
         catch
         {
-            // 权限或注册表异常时静默
+            return false;
+        }
+    }
+
+    /// <summary>回读注册表，判断开机自启项当前是否存在。</summary>
+    private static bool IsAutoStartEntryPresent()
+    {
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(RunKeyPath);
+            return key?.GetValue(AppName) is string;
+        }
+        catch
+        {
+            return false;
         }
     }
 
@@ -232,6 +320,12 @@ public sealed class TrayIconService : IDisposable
         _state.ModeChanged -= OnModeChanged;
         _state.MonitoringChanged -= OnMonitoringChanged;
         _state.QueueFullNotification -= OnQueueFull;
+        if (_autoStartRecheckTimer != null)
+        {
+            _autoStartRecheckTimer.Stop();
+            _autoStartRecheckTimer.Tick -= OnAutoStartRecheckTick;
+            _autoStartRecheckTimer = null;
+        }
         _tray?.Dispose();
     }
 }

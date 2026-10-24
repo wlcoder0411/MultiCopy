@@ -143,4 +143,27 @@ internal static class Win32
     // ---------- 模拟输入 ----------
     [DllImport("user32.dll", SetLastError = true)]
     internal static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
+
+    /// <summary>预构建的 Ctrl+V 输入序列（点选粘贴与全局数字键粘贴共用，只读消费）。</summary>
+    private static readonly INPUT[] CtrlVInputs = BuildCtrlVInputs();
+
+    private static INPUT[] BuildCtrlVInputs()
+    {
+        var inputs = new INPUT[4];
+        inputs[0].Type = Constants.INPUT_KEYBOARD;
+        inputs[0].U.Ki.WVk = (ushort)Constants.VK_CONTROL;
+        inputs[1].Type = Constants.INPUT_KEYBOARD;
+        inputs[1].U.Ki.WVk = (ushort)Constants.VK_V;
+        inputs[2].Type = Constants.INPUT_KEYBOARD;
+        inputs[2].U.Ki.WVk = (ushort)Constants.VK_V;
+        inputs[2].U.Ki.DwFlags = Constants.KEYEVENTF_KEYUP;
+        inputs[3].Type = Constants.INPUT_KEYBOARD;
+        inputs[3].U.Ki.WVk = (ushort)Constants.VK_CONTROL;
+        inputs[3].U.Ki.DwFlags = Constants.KEYEVENTF_KEYUP;
+        return inputs;
+    }
+
+    /// <summary>注入 Ctrl+V。返回是否全部事件注入成功（false=被 UIPI 等阻止）。</summary>
+    internal static bool SendCtrlV()
+        => SendInput((uint)CtrlVInputs.Length, CtrlVInputs, INPUT.Size) == (uint)CtrlVInputs.Length;
 }

@@ -1,0 +1,79 @@
+<Window x:Class="MultiCopy.Views.HelpDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="快捷键与使用说明"
+        Width="460" Height="600"
+        MinWidth="420" MinHeight="480"
+        ResizeMode="CanResize"
+        ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource BackgroundBrush}"
+        Foreground="{DynamicResource ForegroundBrush}">
+    <Window.Resources>
+        <Style x:Key="SectionHeader" TargetType="TextBlock">
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="FontSize" Value="{StaticResource FontSizeBody}" />
+            <Setter Property="Margin" Value="0,12,0,4" />
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+        </Style>
+        <Style x:Key="HelpText" TargetType="TextBlock">
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="LineHeight" Value="21" />
+            <Setter Property="FontSize" Value="{StaticResource FontSizeCaption}" />
+        </Style>
+        <Style x:Key="KeyRun" TargetType="Run">
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Text="快捷键与使用说明"
+                   FontSize="{StaticResource FontSizeLarge}" FontWeight="SemiBold" />
+
+        <ScrollViewer Grid.Row="1" Margin="0,4,0,0" VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+                <TextBlock Style="{StaticResource SectionHeader}" Text="全局快捷键（任何窗口）" />
+                <TextBlock Style="{StaticResource HelpText}">
+                    <Run Style="{StaticResource KeyRun}" Text="Alt+Z" /><Run Text="　调出 / 隐藏 MultiCopy" /><LineBreak />
+                    <Run Style="{StaticResource KeyRun}" Text="Ctrl+V" /><Run Text="　队列粘贴模式开启时，按序粘贴下一条" /><LineBreak />
+                    <Run Style="{StaticResource KeyRun}" Text="Ctrl+Shift+V / Shift+V" /><Run Text="　普通粘贴，不消耗队列" />
+                </TextBlock>
+
+                <TextBlock Style="{StaticResource SectionHeader}" Text="MultiCopy 窗口内（需窗口有键盘焦点）" />
+                <TextBlock Style="{StaticResource HelpText}">
+                    <Run Style="{StaticResource KeyRun}" Text="↑ / ↓" /><Run Text="　在列表中上下选择" /><LineBreak />
+                    <Run Style="{StaticResource KeyRun}" Text="Enter" /><Run Text="　粘贴选中项" /><LineBreak />
+                    <Run Style="{StaticResource KeyRun}" Text="Del" /><Run Text="　删除选中项" /><LineBreak />
+                    <Run Style="{StaticResource KeyRun}" Text="Ctrl+Z" /><Run Text="　撤销上一次粘贴 / 删除" /><LineBreak />
+                    <Run Style="{StaticResource KeyRun}" Text="Esc" /><Run Text="　清空搜索；再按一次隐藏窗口" />
+                </TextBlock>
+
+                <TextBlock Style="{StaticResource SectionHeader}" Text="鼠标操作" />
+                <TextBlock Style="{StaticResource HelpText}">
+                    <Run Style="{StaticResource KeyRun}" Text="单击普通项" /><Run Text="　粘贴并从队列移除" /><LineBreak />
+                    <Run Style="{StaticResource KeyRun}" Text="双击置顶项" /><Run Text="　粘贴但保留" /><LineBreak />
+                    <Run Style="{StaticResource KeyRun}" Text="右键条目" /><Run Text="　置顶、移动到分组、删除" />
+                </TextBlock>
+
+                <TextBlock Style="{StaticResource SectionHeader}" Text="使用提示" />
+                <TextBlock Style="{StaticResource HelpText}">
+                    <Run Text="• 序号固定按「置顶 → 未分组 → 各分组」排序，搜索或折叠不会改变编号。" /><LineBreak />
+                    <Run Text="• 窗口隐藏到托盘时监控暂停，Ctrl+V 也随之暂停。" /><LineBreak />
+                    <Run Text="• Ctrl+Z 与方向键仅在窗口内生效；粘贴后可按 Alt+Z 回到窗口撤销。" /><LineBreak />
+                    <Run Text="• 队列上限 30 条，顶部显示当前容量，满后请在顶部清空或删除条目。" />
+                </TextBlock>
+            </StackPanel>
+        </ScrollViewer>
+
+        <Button Grid.Row="2" Style="{StaticResource PrimaryButton}"
+                HorizontalAlignment="Right" Margin="0,14,0,0"
+                Content="知道了" Click="Close_Click" />
+    </Grid>
+</Window>

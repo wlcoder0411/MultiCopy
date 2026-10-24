@@ -24,6 +24,14 @@ public abstract partial class ClipboardItem : ObservableObject
     [ObservableProperty]
     private bool _isPinned;
 
+    /// <summary>键盘导航当前选中项（瞬态 UI 状态，不参与持久化与指纹）。</summary>
+    [ObservableProperty]
+    private bool _isKeyboardSelected;
+
+    /// <summary>列表显示的全局序号（1 基，0=不显示）。由 ViewModel 按展示顺序统一分配。</summary>
+    [ObservableProperty]
+    private int _displayIndex;
+
     /// <summary>单行预览。子类在构造函数体中赋值。</summary>
     public string Preview { get; protected set; } = string.Empty;
 
