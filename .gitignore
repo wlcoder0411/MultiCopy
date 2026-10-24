@@ -433,6 +433,7 @@ FodyWeavers.xsd
 # 编译产物 / 安装包二进制（不提交，通过 GitHub Releases 分发）
 dist/
 publish/
+_backup_net8/
 
 # 本地发布脚本（含本地路径配置，不入库）
 build-setup.bat

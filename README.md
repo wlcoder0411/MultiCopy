@@ -3,9 +3,9 @@
 > Windows 桌面多段复制粘贴工具：连续复制多条文本，再按队列顺序或选择性粘贴。
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![.NET](https://img.shields.io/badge/.NET-8.0-512BD4.svg)](https://dotnet.microsoft.com/)
+[![.NET](https://img.shields.io/badge/.NET-10.0-512BD4.svg)](https://dotnet.microsoft.com/)
 [![Platform](https://img.shields.io/badge/platform-Windows%20x64-0078D6.svg)](#)
-[![Version](https://img.shields.io/badge/version-6.0-brightgreen.svg)](../../releases)
+[![Version](https://img.shields.io/badge/version-7.0-brightgreen.svg)](../../releases)
 
 ![MultiCopy 主界面（暗色主题）](docs/screenshots/origin.png)
 
@@ -46,13 +46,13 @@ MultiCopy 解决一个常见痛点：整理资料、填写表单、收集素材�
 
 ### 方式一：安装包（推荐普通用户）
 
-前往 [Releases](../../releases) 下载 `MultiCopySetup-6.0.exe`，双击安装即可。安装包支持中文界面、桌面快捷方式、开机自启选项。
+前往 [Releases](../../releases) 下载 `MultiCopySetup-7.0.exe`，双击安装即可。安装包支持中文界面、桌面快捷方式、开机自启选项。
 
 ### 方式二：绿色免安装
 
 前往 [Releases](../../releases) 下载绿色版可执行.exe文件，下载后双击 `MultiCopy.exe` 直接运行（无需安装 .NET 运行时，单文件自包含）。
 
-> 单文件 exe （已内嵌 .NET 8 WPF 运行时），首次启动会解压到临时目录，慢 1–3 秒属正常。
+> 单文件 exe （已内嵌 .NET 10 WPF 运行时），首次启动会解压到临时目录，慢 1–3 秒属正常。
 
 ## 使用说明
 
@@ -107,7 +107,7 @@ MultiCopy 解决一个常见痛点：整理资料、填写表单、收集素材�
 
 ### 环境要求
 
-- [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)（Windows）
+- [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)（Windows，10.0.100+）
 - （可选）[Inno Setup 6](https://jrsoftware.org/isdl.php)：用于生成安装包
 
 ### 编译运行
@@ -121,7 +121,7 @@ dotnet run --project src\MultiCopy\MultiCopy.csproj
 
 ## 技术栈
 
-- **.NET 8** + **WPF**（Windows 桌面）
+- **.NET 10** + **WPF**（Windows 桌面，C# 14）
 - [CommunityToolkit.Mvvm](https://github.com/CommunityToolkit/dotnet) 8.3.2 — MVVM 框架
 - [Hardcodet.NotifyIcon.Wpf](https://github.com/hardcodet/wpf-notifyicon) 1.1.0 — 托盘图标
 - Inno Setup 6 — 安装包打包
