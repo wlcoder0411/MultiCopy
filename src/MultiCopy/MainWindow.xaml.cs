@@ -37,6 +37,7 @@ public partial class MainWindow : Window
     private Point _dragStart;
     private ClipboardItem? _dragItem;
     private bool _suppressNextClick;
+    private long _normalClickCooldownUntil;
 
     public MainWindow()
     {
@@ -463,9 +464,12 @@ public partial class MainWindow : Window
         if (sender is not FrameworkElement fe || fe.DataContext is not ClipboardItemRow row) return;
 
         var item = row.Item;
-        bool keep = _vm.IsKeepAfterPaste(item);
-        // 普通项：仅单击；置顶项：仅双击
-        if (keep ? e.ClickCount < 2 : e.ClickCount != 1) return;
+        // 置顶项的双击在 PreviewMouseLeftButtonDown 中处理，MouseUp 不再参与
+        if (_vm.IsKeepAfterPaste(item)) return;
+
+        // 普通项仅单击；双击的第二次抬起若穿透到下一行，用冷却窗口拦截
+        if (e.ClickCount != 1) return;
+        if (Environment.TickCount64 < _normalClickCooldownUntil) return;
 
         // 搜索框曾获焦时把焦点还给目标应用；前台未就绪时跳过粘贴并保留该项待重试
         if (!RestoreTargetFocusBeforePaste())
@@ -474,8 +478,8 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (keep) _vm.PastePinnedItem(item);
-        else _vm.PasteNormalItem(item);
+        _normalClickCooldownUntil = Environment.TickCount64 + 300;
+        _vm.PasteNormalItem(item);
     }
 
     // ---------- 拖拽导出：把条目拖到目标窗口或文件夹 ----------
@@ -491,6 +495,21 @@ public partial class MainWindow : Window
 
         if (sender is FrameworkElement fe && fe.DataContext is ClipboardItemRow row)
         {
+            // 置顶项：第二次按下（双击）直接粘贴并保留。
+            // 用 PreviewMouseLeftButtonDown 的 ClickCount，避免第二次 MouseUp 被列表容器接管。
+            if (e.ClickCount == 2 && _vm != null && _vm.IsKeepAfterPaste(row.Item))
+            {
+                _dragItem = null;
+                e.Handled = true;
+                if (!RestoreTargetFocusBeforePaste())
+                {
+                    (Application.Current as App)?.Tray?.ShowPasteBlockedTip();
+                    return;
+                }
+                _vm.PastePinnedItem(row.Item);
+                return;
+            }
+
             _dragStart = e.GetPosition(this);
             _dragItem = row.Item;
         }
