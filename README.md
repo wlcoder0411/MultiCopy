@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![.NET](https://img.shields.io/badge/.NET-10.0-512BD4.svg)](https://dotnet.microsoft.com/)
 [![Platform](https://img.shields.io/badge/platform-Windows%20x64-0078D6.svg)](#)
-[![Version](https://img.shields.io/badge/version-7.1-brightgreen.svg)](../../releases)
+[![Version](https://img.shields.io/badge/version-7.2-brightgreen.svg)](../../releases)
 
 ![MultiCopy 主界面（暗色主题）](docs/screenshots/origin.png)
 
@@ -56,17 +56,15 @@ MultiCopy 解决一个常见痛点：整理资料、填写表单、收集素材�
 
 ## 界面预览
 
-> 以下截图为早期版本，当前顶部栏已精简为 5 个控件，功能以文字说明为准。
-
 | 暗色主题 | 亮色主题 |
 | :-: | :-: |
 | ![暗色主题](docs/screenshots/main-window-dark.png) | ![亮色主题](docs/screenshots/main-window-light.png) |
 
-| 设置分组 | 监控 |
+| 新建分组 | 监控剪贴板 |
 | :-: | :-: |
-| ![设置对话框](docs/screenshots/Group.png) | ![托盘菜单](docs/screenshots/monitor.png) |
+| ![新建分组](docs/screenshots/Group.png) | ![监控剪贴板](docs/screenshots/monitor.png) |
 | 序号自增与自定义前/后缀 | 前/后缀内容添加 |
-| ![设置对话框](docs/screenshots/number.png) | ![设置对话框](docs/screenshots/context.png) |
+| ![序号格式](docs/screenshots/number.png) | ![前缀内容编辑](docs/screenshots/context.png) |
 
 ## 下载安装
 
@@ -74,7 +72,7 @@ MultiCopy 解决一个常见痛点：整理资料、填写表单、收集素材�
 
 ### 方式一：安装包（推荐普通用户）
 
-前往 [Releases](../../releases) 下载 `MultiCopySetup-7.1.exe`，双击安装即可。安装包支持中文界面、桌面快捷方式、开机自启选项。
+前往 [Releases](../../releases) 下载 `MultiCopySetup-7.2.exe`，双击安装即可。安装包支持中文界面、桌面快捷方式、开机自启选项。
 
 ### 方式二：绿色免安装
 
@@ -219,12 +217,18 @@ publish.ps1                    一键发布脚本（本地使用）
 - **复制采集**：`AddClipboardFormatListener` 注册监听，接收 `WM_CLIPBOARDUPDATE`；文本读取 `CF_UNICODETEXT`，图片按 `PNG > CF_DIBV5 > CF_DIB` 优先级读取
 - **按序粘贴**：低级键盘钩子 `WH_KEYBOARD_LL` 拦截 `Ctrl+V`，把队首写入剪贴板后放行原按键，目标应用读到的就是队首内容；用标志位防止自身写入回环与模拟按键重入
 - **不抢焦点**：主窗口使用 `WS_EX_NOACTIVATE`；点选粘贴时通过 `AttachThreadInput` / `SetForegroundWindow` 把焦点交还目标应用，再注入 `Ctrl+V`
+- **统一列表**：区域标题行（置顶 / 未分组 / 分组）与内容行由同一个 `ListBox` 渲染，选择、滚动与虚拟化由控件统一处理，不再维护多套并列列表
 - **持久化**：`System.Text.Json` + `.tmp` 原子替换；图片单独存为 PNG，启动时统一清理孤儿图片
 - **去重与回音抑制**：短窗口去重 + 目标集合内容去重；记录最近队列粘贴文本，抑制目标应用写回剪贴板造成的重复入队
 - **撤销**：内存中保留最近 8 次「移除」记录，恢复时按原分组与原索引插回
 - **拖拽导出**：OLE `DataObject` 提供 `UnicodeText / Text / HTML`；图片额外写入临时 PNG 并附带 `FileDrop`
 
 ## 更新日志
+
+### v7.2
+
+- 列表渲染重构：区域标题行与内容行统一由同一个 `ListBox` 呈现，选择、滚动与虚拟化统一处理
+- 修复窗口几何收敛边距，避免保存尺寸偏大时底部提示栏落到屏幕外
 
 ### v7.1
 

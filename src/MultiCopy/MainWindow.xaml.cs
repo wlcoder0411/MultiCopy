@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Text;
 using System.Windows;
 using System.Windows.Controls;
@@ -115,6 +116,8 @@ public partial class MainWindow : Window
         if (e.Key == Key.Down || e.Key == Key.Up)
         {
             _vm.MoveSelection(e.Key == Key.Down ? 1 : -1);
+            if (_vm.SelectedEntry != null)
+                ResultsList.ScrollIntoView(_vm.SelectedEntry);
             e.Handled = true;
             return;
         }
@@ -142,10 +145,7 @@ public partial class MainWindow : Window
         {
             // 搜索框有文本时 Delete 用于删除字符，不删除条目
             if (searchFocused && searchHasText) return;
-            if (_vm.SelectedItem.IsPinned)
-                _vm.DeletePinnedCommand.Execute(_vm.SelectedItem);
-            else
-                _vm.DeleteNormalCommand.Execute(_vm.SelectedItem);
+            _vm.DeleteItemCommand.Execute(_vm.SelectedItem);
             e.Handled = true;
         }
     }
@@ -180,8 +180,16 @@ public partial class MainWindow : Window
     {
         _vm = vm;
         DataContext = vm;
+        vm.PropertyChanged += OnViewModelPropertyChanged;
         try { Icon = IconFactory.CreateAppIcon(); }
         catch { /* 图标生成失败不影响运行 */ }
+    }
+
+    /// <summary>选择变化（自动续选/撤销恢复）时把对应行滚动到可见区域。</summary>
+    private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(MainViewModel.SelectedEntry) && _vm?.SelectedEntry != null)
+            ResultsList.ScrollIntoView(_vm.SelectedEntry);
     }
 
     // ---------- 支持作者：溢出菜单触发弹窗 ----------
@@ -452,8 +460,9 @@ public partial class MainWindow : Window
 
         // 点击落在图钉/删除按钮上时不处理
         if (e.OriginalSource is DependencyObject d && FindAncestor<Button>(d) != null) return;
-        if (sender is not FrameworkElement fe || fe.DataContext is not ClipboardItem item) return;
+        if (sender is not FrameworkElement fe || fe.DataContext is not ClipboardItemRow row) return;
 
+        var item = row.Item;
         bool keep = _vm.IsKeepAfterPaste(item);
         // 普通项：仅单击；置顶项：仅双击
         if (keep ? e.ClickCount < 2 : e.ClickCount != 1) return;
@@ -480,10 +489,10 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (sender is FrameworkElement fe && fe.DataContext is ClipboardItem item)
+        if (sender is FrameworkElement fe && fe.DataContext is ClipboardItemRow row)
         {
             _dragStart = e.GetPosition(this);
-            _dragItem = item;
+            _dragItem = row.Item;
         }
         else
         {
@@ -595,7 +604,7 @@ public partial class MainWindow : Window
         // 箭头列已自行处理并标记 Handled，这里不会再收到；按钮命中不处理
         if (e.OriginalSource is DependencyObject d && FindAncestor<Button>(d) != null) return;
 
-        if (sender is FrameworkElement fe && fe.DataContext is ClipboardGroup g)
+        if (sender is FrameworkElement fe && fe.DataContext is ClipboardHeaderRow { Group: { } g })
         {
             _vm.SetActiveGroupCommand.Execute(g);
         }
@@ -606,7 +615,7 @@ public partial class MainWindow : Window
     {
         if (_vm == null) return;
         e.Handled = true; // 阻止冒泡到 GroupHeader_Click
-        if (sender is FrameworkElement fe && fe.DataContext is ClipboardGroup g)
+        if (sender is FrameworkElement fe && fe.DataContext is ClipboardHeaderRow { Group: { } g })
         {
             _vm.ToggleGroupExpandCommand.Execute(g);
         }
@@ -620,9 +629,11 @@ public partial class MainWindow : Window
         if (_vm == null) return;
         if (sender is not ContextMenu ctxMenu) return;
 
-        // 被右键的列表项（PlacementTarget.DataContext = ClipboardItem）
-        if (ctxMenu.PlacementTarget is not FrameworkElement fe || fe.DataContext is not ClipboardItem item)
+        // 被右键的列表项（PlacementTarget.DataContext = ClipboardItemRow）
+        if (ctxMenu.PlacementTarget is not FrameworkElement fe || fe.DataContext is not ClipboardItemRow row)
             return;
+
+        var item = row.Item;
 
         // 找到"移动到分组…"MenuItem（第一个）
         MenuItem? moveMenu = null;
@@ -709,10 +720,12 @@ public partial class MainWindow : Window
         double virtualRight = virtualLeft + virtualWidth;
         double virtualBottom = virtualTop + virtualHeight;
 
-        width = Math.Clamp(width, MinWidth, Math.Max(MinWidth, virtualWidth));
-        height = Math.Clamp(height, MinHeight, Math.Max(MinHeight, virtualHeight));
-        left = Math.Clamp(left, virtualLeft, Math.Max(virtualLeft, virtualRight - 100));
-        top = Math.Clamp(top, virtualTop, Math.Max(virtualTop, virtualBottom - 100));
+        // 虚拟屏范围内收敛：从大屏保存的几何回到小屏时，保证标题栏仍可抓取。
+        // 预留边距，避免底部提示栏或右侧控件落到屏幕外。
+        width = Math.Clamp(width, MinWidth, Math.Max(MinWidth, virtualWidth - 16));
+        height = Math.Clamp(height, MinHeight, Math.Max(MinHeight, virtualHeight - 48));
+        left = Math.Clamp(left, virtualLeft, Math.Max(virtualLeft, virtualRight - width - 8));
+        top = Math.Clamp(top, virtualTop, Math.Max(virtualTop, virtualBottom - height - 8));
 
         WindowStartupLocation = WindowStartupLocation.Manual;
         Left = left;

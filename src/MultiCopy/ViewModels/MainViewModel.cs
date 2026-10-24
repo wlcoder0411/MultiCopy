@@ -1,9 +1,5 @@
-using System.Collections;
 using System.Collections.ObjectModel;
-using System.Collections.Specialized;
-using System.ComponentModel;
 using System.Windows;
-using System.Windows.Data;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -15,21 +11,14 @@ using MultiCopy.Views;
 namespace MultiCopy.ViewModels;
 
 /// <summary>
-/// 主窗口视图模型。负责队列列表绑定、模式开关双向同步、内容分组管理、各命令。
-/// 点选粘贴由视图调用 <see cref="PasteNormalItem"/> / <see cref="PastePinnedItem"/>
-/// （因单击/双击区分需在视图侧处理）。
+/// 主窗口视图模型。维护单一的扁平显示行集合（<see cref="Rows"/>），
+/// 由视图用一个 ListBox 统一渲染；选择、粘贴、分组操作都作用在行上。
 /// </summary>
 public sealed partial class MainViewModel : ObservableObject
 {
     private readonly ClipboardQueue _queue;
     private readonly PasteExecutor _pasteExecutor;
     private readonly AppState _state = AppState.Instance;
-
-    // 缓存固定集合的默认视图，避免反复调用 CollectionViewSource.GetDefaultView。
-    // 分组视图按需获取（分组动态创建/删除）。
-    private readonly ICollectionView _pinnedView;
-    private readonly ICollectionView _ungroupedView;
-    private readonly ICollectionView _groupsView;
 
     /// <summary>未分组普通项（默认状态全部落此）。</summary>
     public ObservableCollection<ClipboardItem> UngroupedItems => _queue.UngroupedItems;
@@ -38,6 +27,9 @@ public sealed partial class MainViewModel : ObservableObject
     public ObservableCollection<ClipboardGroup> Groups => _queue.Groups;
 
     public ObservableCollection<ClipboardItem> PinnedItems => _queue.PinnedItems;
+
+    /// <summary>扁平显示行：区域标题行 + 内容行，直接绑定到 ListBox。</summary>
+    public ObservableCollection<ClipboardListEntry> Rows { get; } = new();
 
     [ObservableProperty]
     private bool _modeOn;
@@ -49,33 +41,25 @@ public sealed partial class MainViewModel : ObservableObject
     /// <summary>是否为亮色主题（用于主题切换菜单的动态文案）。</summary>
     public bool IsLightTheme => ThemeService.CurrentTheme == AppTheme.Light;
 
-    /// <summary>是否存在任何分组（决定渲染模式：扁平 vs 分组）。</summary>
-    [ObservableProperty]
-    private bool _isGrouping;
-
-    /// <summary>未分组项是否为空（控制分组模式下未分组区显示）。</summary>
-    [ObservableProperty]
-    private bool _ungroupedEmpty = true;
-
-    /// <summary>普通项是否全部为空（含分组，用于空状态）。</summary>
-    [ObservableProperty]
-    private bool _normalEmpty = true;
-
-    /// <summary>置顶区是否为空。</summary>
-    [ObservableProperty]
-    private bool _pinnedEmpty = true;
-
     /// <summary>全部为空（用于空状态提示）。</summary>
     [ObservableProperty]
     private bool _allEmpty = true;
+
+    /// <summary>是否显示空状态覆盖层（空队列或搜索无结果；仅剩空分组标题时不覆盖）。</summary>
+    [ObservableProperty]
+    private bool _showEmptyState;
+
+    /// <summary>搜索无结果（关键字非空且没有任何内容行）。</summary>
+    [ObservableProperty]
+    private bool _searchNoResult;
 
     /// <summary>搜索关键字（双向绑定搜索框，UpdateSourceTrigger=PropertyChanged）。</summary>
     [ObservableProperty]
     private string? _searchText;
 
-    /// <summary>键盘导航当前选中项（null=无选中）。</summary>
+    /// <summary>当前选中的列表行（可能为标题行；粘贴操作只认内容行）。</summary>
     [ObservableProperty]
-    private ClipboardItem? _selectedItem;
+    private ClipboardListEntry? _selectedEntry;
 
     /// <summary>相对时间刷新定时器（30 秒）。</summary>
     private readonly DispatcherTimer _relativeTimeTimer;
@@ -106,18 +90,8 @@ public sealed partial class MainViewModel : ObservableObject
     private const string EmptyOperationHint =
         "在任意应用 Ctrl+C 收集内容 · Alt+Z 随时调出 · 点击此处查看全部快捷键";
 
-    /// <summary>最近一次选择在可导航列表中的序号，用于出队后自动续选。</summary>
-    private int _selectedIndexHint;
-
     /// <summary>当前是否在搜索状态（SearchText 非空白）。</summary>
     public bool IsSearching => !string.IsNullOrWhiteSpace(SearchText);
-
-    /// <summary>搜索无结果（关键字非空且过滤后全空）。UI 据此显示"未找到"提示。</summary>
-    public bool SearchNoResult =>
-        IsSearching
-        && GetFilteredCount(PinnedItems) == 0
-        && GetFilteredCount(UngroupedItems) == 0
-        && !AnyGroupHasFilteredMatch();
 
     /// <summary>当前活动分组 Id（null=未分组/默认）。双向同步 AppState。</summary>
     public string? ActiveGroupId
@@ -131,25 +105,19 @@ public sealed partial class MainViewModel : ObservableObject
         _queue = queue;
         _pasteExecutor = pasteExecutor;
 
-        // 缓存固定集合的默认视图（Pinned/Ungrouped/Groups），后续直接复用
-        _pinnedView = CollectionViewSource.GetDefaultView(PinnedItems);
-        _ungroupedView = CollectionViewSource.GetDefaultView(UngroupedItems);
-        _groupsView = CollectionViewSource.GetDefaultView(Groups);
-
         _modeOn = _state.ModeOn;
         _state.ModeChanged += OnAppStateModeChanged;
         _isMonitoring = _state.IsMonitoring;
         _state.MonitoringChanged += OnAppStateMonitoringChanged;
         ThemeService.ThemeChanged += OnThemeChanged;
         _queue.Changed += OnQueueChanged;
-        _queue.Groups.CollectionChanged += OnGroupsChanged;
 
         // 相对时间每 30 秒刷新一次，保证「刚刚 / N 分钟前」近似实时
         _relativeTimeTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
         _relativeTimeTimer.Tick += (_, _) => UpdateRelativeTimes();
         _relativeTimeTimer.Start();
 
-        UpdateStates();
+        RefreshAll(advanceIfMissing: false);
     }
 
     private void OnAppStateModeChanged(object? sender, bool modeOn) => ModeOn = modeOn;
@@ -175,162 +143,128 @@ public sealed partial class MainViewModel : ObservableObject
     partial void OnIsMonitoringChanged(bool value) => _state.IsMonitoring = value;
 
     private void OnQueueChanged(object? sender, EventArgs e)
-    {
-        if (IsSearching)
-        {
-            // 入队/出队/移动后，组级别可见性可能变化（某组从无匹配→有匹配或反之），刷新 Groups 视图
-            _groupsView.Refresh();
-        }
-        // 先刷新视图再重算状态/序号，保证 GroupHasMatch 过滤后的可见集合正确
-        UpdateStates();
-        RestoreSelectionAfterChange();
-    }
+        => RefreshAll(advanceIfMissing: true);
 
-    /// <summary>新建分组时给其 Items 默认视图附加 Filter（仅搜索状态下需要）。</summary>
-    private void OnGroupsChanged(object? sender, NotifyCollectionChangedEventArgs e)
-    {
-        if (e.Action == NotifyCollectionChangedAction.Add && IsSearching && e.NewItems != null)
-        {
-            string keyword = SearchText!.Trim();
-            foreach (ClipboardGroup g in e.NewItems)
-            {
-                CollectionViewSource.GetDefaultView(g.Items).Filter =
-                    obj => ItemMatches(obj, keyword);
-            }
-        }
-    }
-
-    /// <summary>SearchText 变更时重新应用过滤并刷新相关计算属性。</summary>
     partial void OnSearchTextChanged(string? value)
-    {
-        ApplySearch();
-        // 选中项被搜索条件过滤掉时清除选择，避免对不可见项执行粘贴
-        EnsureSelectionVisible();
-        OnPropertyChanged(nameof(IsSearching));
-        OnPropertyChanged(nameof(SearchNoResult));
-        UpdateStates();
-    }
+        => RefreshAll(advanceIfMissing: false);
+
+    partial void OnSelectedEntryChanged(ClipboardListEntry? value)
+        => OnPropertyChanged(nameof(SelectedItem));
+
+    /// <summary>当前选中的条目（来自内容行；标题行选中时为 null）。</summary>
+    public ClipboardItem? SelectedItem => (SelectedEntry as ClipboardItemRow)?.Item;
 
     /// <summary>
-    /// 对所有列表的默认视图设置/清除 Filter。
-    /// keyword==null 时清除 Filter（显示全部）；否则设置 ItemMatches 谓词。
-    /// Groups 视图额外用 GroupHasMatch 判断整组是否显示。
+    /// 重建单一行列表：区域标题行 + 内容行。队列变化、搜索、分组折叠都走这里。
+    /// advanceIfMissing=true 时，若原选中项已被移除，按原位置自动续选下一项。
     /// </summary>
-    private void ApplySearch()
+    public void RebuildRows(bool advanceIfMissing)
     {
+        var previousItem = SelectedItem;
+        var rowsBefore = Rows.OfType<ClipboardItemRow>().ToList();
+        int previousItemIndex = previousItem == null
+            ? -1
+            : rowsBefore.FindIndex(r => ReferenceEquals(r.Item, previousItem));
+
+        Rows.Clear();
         string? keyword = IsSearching ? SearchText!.Trim() : null;
 
-        // 1. Pinned / Ungrouped 默认视图（使用缓存视图）
-        _pinnedView.Filter = keyword == null ? null : obj => ItemMatches(obj, keyword);
-        _ungroupedView.Filter = keyword == null ? null : obj => ItemMatches(obj, keyword);
-
-        // 2. Groups 默认视图（组级别：该组是否有任意匹配项）
-        _groupsView.Filter = keyword == null ? null : obj => GroupHasMatch((ClipboardGroup)obj, keyword);
-
-        // 3. 每个 group.Items 默认视图（项级别，分组动态创建故按需获取）
-        foreach (var g in Groups)
+        // 1. 置顶区：有可见项才显示标题
+        var pinned = FilterItems(PinnedItems, keyword);
+        if (pinned.Count > 0)
         {
-            CollectionViewSource.GetDefaultView(g.Items).Filter =
-                keyword == null ? null : obj => ItemMatches(obj, keyword);
+            Rows.Add(new ClipboardHeaderRow(ClipboardSectionKind.Pinned, null,
+                "置顶（双击粘贴 · 不会被 Ctrl+V 消耗）"));
+            foreach (var item in pinned)
+                Rows.Add(new ClipboardItemRow(item, ClipboardSectionKind.Pinned, null));
         }
-    }
 
-    /// <summary>
-    /// 条目是否包含关键字（部分匹配，不区分大小写）。
-    /// 文本项按 Text 过滤；图片项按元数据（SourceApp + Preview，如"截图 2026-07-02 14:30 截图 1920x1080"）过滤。
-    /// 图片不支持内容搜索（不引入 OCR）。
-    /// </summary>
-    private static bool ItemMatches(object item, string keyword)
-    {
-        if (item is not ClipboardItem ci) return false;
-        return ci switch
+        // 2. 未分组区：无分组时作为扁平队列始终显示；有分组时仅在非空时显示
+        var ungrouped = FilterItems(UngroupedItems, keyword);
+        if (Groups.Count == 0)
         {
-            TextClipboardItem text => text.Text != null && text.Text.Contains(keyword, StringComparison.OrdinalIgnoreCase),
-            ImageClipboardItem img => (img.SourceApp + " " + img.Preview).Contains(keyword, StringComparison.OrdinalIgnoreCase),
-            _ => false
-        };
-    }
+            Rows.Add(new ClipboardHeaderRow(ClipboardSectionKind.Ungrouped, null,
+                "队列（开模式后按 Ctrl+V 按序粘贴 · 单击直接粘贴）"));
+            foreach (var item in ungrouped)
+                Rows.Add(new ClipboardItemRow(item, ClipboardSectionKind.Ungrouped, null));
+        }
+        else if (ungrouped.Count > 0)
+        {
+            Rows.Add(new ClipboardHeaderRow(ClipboardSectionKind.Ungrouped, null,
+                "未分组（单击粘贴 · 开模式 Ctrl+V 按序出队）"));
+            foreach (var item in ungrouped)
+                Rows.Add(new ClipboardItemRow(item, ClipboardSectionKind.Ungrouped, null));
+        }
 
-    /// <summary>分组内是否有任意条目匹配关键字（直接遍历原始 Items，不依赖视图 Count）。</summary>
-    private static bool GroupHasMatch(ClipboardGroup g, string keyword)
-    {
-        foreach (var ci in g.Items)
-            if (ItemMatches(ci, keyword))
-                return true;
-        return false;
-    }
-
-    /// <summary>
-    /// 获取集合默认视图过滤后的项数。
-    /// 优先用 ListCollectionView.Count（内部维护过滤后计数，O(1)），
-    /// 回退到手动遍历（防御性，理论上不会走到）。
-    /// </summary>
-    private static int GetFilteredCount(IEnumerable source)
-    {
-        var view = CollectionViewSource.GetDefaultView(source);
-        if (view is ListCollectionView lcv) return lcv.Count;
-        int n = 0;
-        foreach (var _ in view) n++;
-        return n;
-    }
-
-    /// <summary>是否存在任意分组的过滤后视图非空。</summary>
-    private bool AnyGroupHasFilteredMatch()
-    {
+        // 3. 各分组：标题始终显示（空分组也可管理）；搜索时只显示有匹配项的分组
         foreach (var g in Groups)
-            if (GetFilteredCount(g.Items) > 0)
-                return true;
-        return false;
+        {
+            var groupItems = FilterItems(g.Items, keyword);
+            if (keyword != null && groupItems.Count == 0) continue;
+
+            Rows.Add(new ClipboardHeaderRow(ClipboardSectionKind.Group, g, g.Name));
+            if (!g.IsExpanded) continue;
+            foreach (var item in groupItems)
+                Rows.Add(new ClipboardItemRow(item, ClipboardSectionKind.Group, g));
+        }
+
+        // 4. 选择恢复
+        if (previousItem == null) return;
+
+        var itemRows = Rows.OfType<ClipboardItemRow>().ToList();
+        var same = itemRows.FirstOrDefault(r => ReferenceEquals(r.Item, previousItem));
+        if (same != null)
+        {
+            SelectedEntry = same;
+            return;
+        }
+        if (!advanceIfMissing || itemRows.Count == 0)
+        {
+            SelectedEntry = null;
+            return;
+        }
+        SelectedEntry = itemRows[Math.Clamp(previousItemIndex, 0, itemRows.Count - 1)];
     }
 
-    private void UpdateStates()
+    private void RefreshAll(bool advanceIfMissing)
     {
-        IsGrouping = _queue.IsGrouping;
-        // 搜索时基于过滤后视图计数；不搜索时 Filter=null，GetFilteredCount == 原始 Count
-        UngroupedEmpty = GetFilteredCount(UngroupedItems) == 0;
-        PinnedEmpty = GetFilteredCount(PinnedItems) == 0;
-        NormalEmpty = UngroupedEmpty && !AnyGroupHasFilteredMatch();
-        AllEmpty = NormalEmpty && PinnedEmpty;
-        // 容量指示（口径与实际上限检查一致：NormalCount 排除置顶分组）
+        RebuildRows(advanceIfMissing);
+
         int normalCount = _queue.NormalCount;
         CapacityText = $"{normalCount}/{AppState.MaxQueueItems}";
         IsCapacityWarning = normalCount >= AppState.MaxQueueItems;
-        // 撤销按钮可用性
         CanUndo = _queue.CanUndo;
-        // 底部动态提示：空队列→引导收集；有可撤销操作→提示撤销；否则常规快捷键
+
+        AllEmpty = !Rows.OfType<ClipboardItemRow>().Any();
+        ShowEmptyState = AllEmpty && !Rows.OfType<ClipboardHeaderRow>().Any(h => h.IsGroup);
+        SearchNoResult = IsSearching && AllEmpty;
+        OnPropertyChanged(nameof(IsSearching));
+
         OperationHint = _queue.IsEmpty
             ? EmptyOperationHint
             : (CanUndo ? "可撤销上一步 · Ctrl+Z 撤销 · 点击此处查看全部快捷键" : DefaultOperationHint);
-        // 列表展示序号（置顶 → 未分组 → 各分组，连续编号）
+
         RefreshDisplayIndexes();
-        // 相对时间（入队/撤销后立即刷新，定时器负责周期更新）
         UpdateRelativeTimes();
-        // 搜索专属属性刷新
-        OnPropertyChanged(nameof(IsSearching));
-        OnPropertyChanged(nameof(SearchNoResult));
     }
 
-    // ---------- 键盘导航 ----------
+    private static List<ClipboardItem> FilterItems(IEnumerable<ClipboardItem> source, string? keyword)
+        => keyword == null
+            ? source.ToList()
+            : source.Where(item => ItemMatches(item, keyword)).ToList();
 
-    /// <summary>选中项变化时同步所有条目的高亮标记（含被移出队列的旧选中项，避免撤销后重复高亮）。</summary>
-    partial void OnSelectedItemChanged(ClipboardItem? oldValue, ClipboardItem? newValue)
+    /// <summary>
+    /// 条目是否包含关键字（部分匹配，不区分大小写）。
+    /// 文本项按 Text 过滤；图片项按元数据（SourceApp + Preview）过滤，不做 OCR。
+    /// </summary>
+    private static bool ItemMatches(ClipboardItem item, string keyword) => item switch
     {
-        if (oldValue != null)
-            oldValue.IsKeyboardSelected = false;
+        TextClipboardItem text => text.Text.Contains(keyword, StringComparison.OrdinalIgnoreCase),
+        ImageClipboardItem img => (img.SourceApp + " " + img.Preview).Contains(keyword, StringComparison.OrdinalIgnoreCase),
+        _ => false
+    };
 
-        foreach (var item in AllItems())
-        {
-            if (!ReferenceEquals(item, newValue))
-                item.IsKeyboardSelected = false;
-        }
-        if (newValue != null)
-        {
-            newValue.IsKeyboardSelected = true;
-            // 同步续选提示索引，确保鼠标/撤销等非方向键来源的选择也能正确续选
-            int index = BuildNavigableList().IndexOf(newValue);
-            if (index >= 0) _selectedIndexHint = index;
-        }
-    }
+    // ---------- 显示辅助 ----------
 
     private IEnumerable<ClipboardItem> AllItems()
     {
@@ -339,30 +273,6 @@ public sealed partial class MainViewModel : ObservableObject
         foreach (var g in Groups)
             foreach (var item in g.Items)
                 yield return item;
-    }
-
-    /// <summary>
-    /// 构建键盘可导航列表（按视觉顺序）：置顶项 → 未分组项 → 各展开分组项。
-    /// 各段均通过集合视图枚举，天然尊重当前搜索过滤。
-    /// </summary>
-    private List<ClipboardItem> BuildNavigableList()
-    {
-        var list = new List<ClipboardItem>();
-
-        foreach (var obj in _pinnedView)
-            if (obj is ClipboardItem pinned) list.Add(pinned);
-
-        foreach (var obj in _ungroupedView)
-            if (obj is ClipboardItem ungrouped) list.Add(ungrouped);
-
-        foreach (var obj in _groupsView)
-        {
-            if (obj is not ClipboardGroup g || !g.IsExpanded) continue;
-            foreach (var itemObj in CollectionViewSource.GetDefaultView(g.Items))
-                if (itemObj is ClipboardItem item) list.Add(item);
-        }
-
-        return list;
     }
 
     /// <summary>
@@ -400,59 +310,28 @@ public sealed partial class MainViewModel : ObservableObject
         return $"{createdAt.Year}/{createdAt.Month}/{createdAt.Day}";
     }
 
-    /// <summary>按方向移动键盘选择（delta=+1 向下，-1 向上）。</summary>
+    /// <summary>按方向移动选择（仅内容行，自动跳过标题行）。</summary>
     public void MoveSelection(int delta)
     {
-        var list = BuildNavigableList();
-        if (list.Count == 0)
+        var itemRows = Rows.OfType<ClipboardItemRow>().ToList();
+        if (itemRows.Count == 0)
         {
-            SelectedItem = null;
-            _selectedIndexHint = 0;
+            SelectedEntry = null;
             return;
         }
 
-        int current = SelectedItem == null ? -1 : list.IndexOf(SelectedItem);
+        int current = SelectedEntry is ClipboardItemRow row ? itemRows.IndexOf(row) : -1;
         int next = current < 0
-            ? (delta > 0 ? 0 : list.Count - 1)
-            : Math.Clamp(current + delta, 0, list.Count - 1);
-
-        SelectedItem = list[next];
-        _selectedIndexHint = next;
+            ? (delta > 0 ? 0 : itemRows.Count - 1)
+            : Math.Clamp(current + delta, 0, itemRows.Count - 1);
+        SelectedEntry = itemRows[next];
     }
 
-    /// <summary>选中项被粘贴/删除后，按原序号自动续选下一条，支持连续键盘操作。</summary>
-    private void RestoreSelectionAfterChange()
+    /// <summary>选中指定条目对应的行（撤销恢复后使用）。</summary>
+    private void SelectItem(ClipboardItem item)
     {
-        if (SelectedItem == null) return;
-        if (ContainsAnywhere(SelectedItem)) return;
-
-        var list = BuildNavigableList();
-        if (list.Count == 0)
-        {
-            SelectedItem = null;
-            _selectedIndexHint = 0;
-            return;
-        }
-
-        int index = Math.Clamp(_selectedIndexHint, 0, list.Count - 1);
-        SelectedItem = list[index];
-        _selectedIndexHint = index;
-    }
-
-    private bool ContainsAnywhere(ClipboardItem item)
-    {
-        if (PinnedItems.Contains(item) || UngroupedItems.Contains(item)) return true;
-        foreach (var g in Groups)
-            if (g.Items.Contains(item)) return true;
-        return false;
-    }
-
-    /// <summary>搜索/折叠变化后，若选中项已不可见则清除选择，避免对不可见项执行粘贴。</summary>
-    private void EnsureSelectionVisible()
-    {
-        if (SelectedItem == null) return;
-        if (BuildNavigableList().Contains(SelectedItem)) return;
-        SelectedItem = null;
+        var row = Rows.OfType<ClipboardItemRow>().FirstOrDefault(r => ReferenceEquals(r.Item, item));
+        if (row != null) SelectedEntry = row;
     }
 
     /// <summary>该条目粘贴后是否保留：全局置顶项与置顶分组内的项均保留。</summary>
@@ -493,15 +372,11 @@ public sealed partial class MainViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void DeleteNormal(ClipboardItem? item)
+    private void DeleteItem(ClipboardItem? item)
     {
-        if (item != null) _queue.RemoveNormal(item);
-    }
-
-    [RelayCommand]
-    private void DeletePinned(ClipboardItem? item)
-    {
-        if (item != null) _queue.RemovePinned(item);
+        if (item == null) return;
+        if (item.IsPinned) _queue.RemovePinned(item);
+        else _queue.RemoveNormal(item);
     }
 
     [RelayCommand]
@@ -510,13 +385,13 @@ public sealed partial class MainViewModel : ObservableObject
     [RelayCommand]
     private void ClearAll() => _queue.ClearAll();
 
-    /// <summary>撤销最近一次粘贴出队或删除（最多回退 8 步），并高亮被恢复的条目。</summary>
+    /// <summary>撤销最近一次粘贴出队或删除（最多回退 8 步），并选中被恢复的条目。</summary>
     [RelayCommand]
     private void UndoLastRemoval()
     {
         var restored = _queue.UndoLastRemoval();
         if (restored != null)
-            SelectedItem = restored;
+            SelectItem(restored);
     }
 
     /// <summary>把文本条目按行拆分为多条（去掉空行与首尾空白，最多 100 行）。</summary>
@@ -606,10 +481,8 @@ public sealed partial class MainViewModel : ObservableObject
     private void ToggleGroupExpand(ClipboardGroup? g)
     {
         if (g != null) g.IsExpanded = !g.IsExpanded;
-        // 折叠后选中项可能被隐藏，清掉以免 Enter 粘到不可见项
-        EnsureSelectionVisible();
-        // 折叠/展开会改变可见条目集合，序号需重排
-        RefreshDisplayIndexes();
+        // 折叠/展开会改变可见行集合与选择，整体重建
+        RefreshAll(advanceIfMissing: false);
     }
 
     [RelayCommand]

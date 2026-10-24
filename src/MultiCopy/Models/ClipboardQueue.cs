@@ -22,9 +22,6 @@ public sealed class ClipboardQueue
     /// <summary>置顶集合（不参与自动出队，双击粘贴后保留）。不归属任何分组。</summary>
     public ObservableCollection<ClipboardItem> PinnedItems { get; } = new();
 
-    /// <summary>是否存在任何分组（决定 UI 渲染模式：扁平 vs 分组）。</summary>
-    public bool IsGrouping => Groups.Count > 0;
-
     public bool HasNormal => UngroupedItems.Count > 0 || AnyGroupHasItems();
 
     public bool HasUngrouped => UngroupedItems.Count > 0;
@@ -34,7 +31,7 @@ public sealed class ClipboardQueue
     /// <summary>普通项数量（不含置顶分组内的项，用于容量上限检查）。</summary>
     public int NormalCount => UngroupedItems.Count + SumNonPinnedGroupItems();
 
-    /// <summary>队列内容变化时触发（用于刷新空状态提示、IsGrouping 等）。</summary>
+    /// <summary>队列内容变化时触发（用于重建列表行、刷新状态与空状态提示）。</summary>
     public event EventHandler? Changed;
 
     private void OnChanged() => Changed?.Invoke(this, EventArgs.Empty);
