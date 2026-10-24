@@ -32,6 +32,10 @@ public abstract partial class ClipboardItem : ObservableObject
     [ObservableProperty]
     private int _displayIndex;
 
+    /// <summary>相对复制时间（刚刚 / 3 分钟前 / 昨天），由 ViewModel 定时刷新。</summary>
+    [ObservableProperty]
+    private string _relativeTime = "刚刚";
+
     /// <summary>单行预览。子类在构造函数体中赋值。</summary>
     public string Preview { get; protected set; } = string.Empty;
 

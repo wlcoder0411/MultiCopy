@@ -23,7 +23,9 @@
                     Background="{DynamicResource CardBackgroundBrush}" CornerRadius="6"
                     Cursor="Hand"
                     infra:BringIntoViewBehavior.IsSelected="{Binding IsKeyboardSelected}"
-                    MouseLeftButtonDown="NormalItem_Click"
+                    PreviewMouseLeftButtonDown="ItemDragStart"
+                    PreviewMouseMove="ItemDragMove"
+                    MouseLeftButtonUp="Item_Click"
                     Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType=Window}}">
                 <Border.ContextMenu>
                     <!-- 右键弹出。WPF 右键不触发 MouseLeftButtonDown，故不会触发粘贴。
@@ -31,6 +33,10 @@
                     <ContextMenu Opened="ItemContextMenu_Opened">
                         <MenuItem x:Name="MoveMenu" Header="移动到分组…"
                                   ToolTip="将此项移到其他分组"/>
+                        <MenuItem Header="按行拆分为多条"
+                                  ToolTip="把多行文本拆成多条，按原位置插入"
+                                  Command="{Binding PlacementTarget.Tag.SplitLinesCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                  CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
                         <Separator/>
                         <MenuItem Header="置顶"
                                   Command="{Binding PlacementTarget.Tag.PinCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
@@ -58,6 +64,10 @@
                                TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" />
 
                     <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding RelativeTime}"
+                                   FontSize="{StaticResource FontSizeCaption}"
+                                   Foreground="{DynamicResource ForegroundDimBrush}"
+                                   VerticalAlignment="Center" Margin="0,0,6,0" />
                         <Button Style="{StaticResource GhostButton}" ToolTip="置顶"
                                 Command="{Binding DataContext.PinCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                 CommandParameter="{Binding}">
@@ -91,7 +101,9 @@
                     BorderBrush="{DynamicResource PinBrush}" BorderThickness="2,0,0,0"
                     Cursor="Hand"
                     infra:BringIntoViewBehavior.IsSelected="{Binding IsKeyboardSelected}"
-                    MouseLeftButtonDown="PinnedItem_DoubleClick">
+                    PreviewMouseLeftButtonDown="ItemDragStart"
+                    PreviewMouseMove="ItemDragMove"
+                    MouseLeftButtonUp="Item_Click">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="24" />
@@ -110,6 +122,10 @@
                                TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" />
 
                     <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding RelativeTime}"
+                                   FontSize="{StaticResource FontSizeCaption}"
+                                   Foreground="{DynamicResource ForegroundDimBrush}"
+                                   VerticalAlignment="Center" Margin="0,0,6,0" />
                         <Button Style="{StaticResource GhostButton}" ToolTip="取消置顶"
                                 Command="{Binding DataContext.UnpinCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                 CommandParameter="{Binding}">
@@ -143,7 +159,9 @@
                     Background="{DynamicResource CardBackgroundBrush}" CornerRadius="6"
                     Cursor="Hand"
                     infra:BringIntoViewBehavior.IsSelected="{Binding IsKeyboardSelected}"
-                    MouseLeftButtonDown="NormalItem_Click"
+                    PreviewMouseLeftButtonDown="ItemDragStart"
+                    PreviewMouseMove="ItemDragMove"
+                    MouseLeftButtonUp="Item_Click"
                     Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType=Window}}">
                 <Border.ContextMenu>
                     <ContextMenu Opened="ItemContextMenu_Opened">
@@ -192,6 +210,10 @@
 
                     <!-- 置顶 + 删除按钮（与 NormalItemTemplate 一致） -->
                     <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding RelativeTime}"
+                                   FontSize="{StaticResource FontSizeCaption}"
+                                   Foreground="{DynamicResource ForegroundDimBrush}"
+                                   VerticalAlignment="Center" Margin="0,0,6,0" />
                         <Button Style="{StaticResource GhostButton}" ToolTip="置顶"
                                 Command="{Binding DataContext.PinCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                 CommandParameter="{Binding}">
@@ -225,7 +247,9 @@
                     BorderBrush="{DynamicResource PinBrush}" BorderThickness="2,0,0,0"
                     Cursor="Hand"
                     infra:BringIntoViewBehavior.IsSelected="{Binding IsKeyboardSelected}"
-                    MouseLeftButtonDown="PinnedItem_DoubleClick">
+                    PreviewMouseLeftButtonDown="ItemDragStart"
+                    PreviewMouseMove="ItemDragMove"
+                    MouseLeftButtonUp="Item_Click">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="24" />
@@ -261,6 +285,10 @@
 
                     <!-- 取消置顶 + 删除按钮（与 PinnedItemTemplate 一致，图钉实心填充） -->
                     <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding RelativeTime}"
+                                   FontSize="{StaticResource FontSizeCaption}"
+                                   Foreground="{DynamicResource ForegroundDimBrush}"
+                                   VerticalAlignment="Center" Margin="0,0,6,0" />
                         <Button Style="{StaticResource GhostButton}" ToolTip="取消置顶"
                                 Command="{Binding DataContext.UnpinCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                 CommandParameter="{Binding}">
@@ -297,7 +325,9 @@
                     BorderBrush="{DynamicResource PinBrush}" BorderThickness="2,0,0,0"
                     Cursor="Hand"
                     infra:BringIntoViewBehavior.IsSelected="{Binding IsKeyboardSelected}"
-                    MouseLeftButtonDown="PinnedItem_DoubleClick">
+                    PreviewMouseLeftButtonDown="ItemDragStart"
+                    PreviewMouseMove="ItemDragMove"
+                    MouseLeftButtonUp="Item_Click">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="24" />
@@ -316,6 +346,10 @@
                                TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" />
 
                     <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding RelativeTime}"
+                                   FontSize="{StaticResource FontSizeCaption}"
+                                   Foreground="{DynamicResource ForegroundDimBrush}"
+                                   VerticalAlignment="Center" Margin="0,0,6,0" />
                         <Button Style="{StaticResource GhostButton}" ToolTip="删除"
                                 Command="{Binding DataContext.DeleteNormalCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                 CommandParameter="{Binding}">
@@ -344,7 +378,9 @@
                     BorderBrush="{DynamicResource PinBrush}" BorderThickness="2,0,0,0"
                     Cursor="Hand"
                     infra:BringIntoViewBehavior.IsSelected="{Binding IsKeyboardSelected}"
-                    MouseLeftButtonDown="PinnedItem_DoubleClick">
+                    PreviewMouseLeftButtonDown="ItemDragStart"
+                    PreviewMouseMove="ItemDragMove"
+                    MouseLeftButtonUp="Item_Click">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="24" />
@@ -376,6 +412,10 @@
                     </StackPanel>
 
                     <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding RelativeTime}"
+                                   FontSize="{StaticResource FontSizeCaption}"
+                                   Foreground="{DynamicResource ForegroundDimBrush}"
+                                   VerticalAlignment="Center" Margin="0,0,6,0" />
                         <Button Style="{StaticResource GhostButton}" ToolTip="删除"
                                 Command="{Binding DataContext.DeleteNormalCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                 CommandParameter="{Binding}">
@@ -550,13 +590,8 @@
 
         <!-- 顶部栏 -->
         <DockPanel Grid.Row="0" Margin="12,8,12,6">
-            <!-- 左上角：爱心图标（点击弹收款码，无文字） -->
-            <Path DockPanel.Dock="Left" Style="{StaticResource IconStyle}"
-                  Data="{StaticResource IconHeart}" VerticalAlignment="Center"
-                  Cursor="Hand" MouseLeftButtonDown="SupportAuthor_Click"
-                  Fill="{DynamicResource AccentBrush}" Stroke="{DynamicResource AccentBrush}"/>
             <!-- 容量指示：达到上限时转为警示色 -->
-            <TextBlock DockPanel.Dock="Left" Margin="6,0,0,0" VerticalAlignment="Center"
+            <TextBlock DockPanel.Dock="Left" VerticalAlignment="Center"
                        FontSize="{StaticResource FontSizeCaption}"
                        Text="{Binding CapacityText}">
                 <TextBlock.Style>
@@ -590,33 +625,29 @@
                         Command="{Binding CreateGroupCommand}">
                     <Path Style="{StaticResource IconStyle}" Data="{StaticResource IconPlus}"/>
                 </Button>
-                <Button Style="{StaticResource GhostButton}" ToolTip="清空普通队列（含所有分组）"
-                        Margin="0,0,4,0"
-                        Command="{Binding ClearNormalCommand}">
-                    <Path Style="{StaticResource IconStyle}" Data="{StaticResource IconTrash}"/>
-                </Button>
-                <Button Style="{StaticResource GhostButton}" ToolTip="切换主题"
-                        Margin="0,0,4,0"
-                        Command="{Binding ToggleThemeCommand}">
-                    <Grid Width="16" Height="16">
-                        <Path Style="{StaticResource IconStyle}" Data="{StaticResource IconSun}"
-                              Visibility="{Binding IsLightTheme, Converter={x:Static infra:BoolToVisibilityConverter.Instance}}"/>
-                        <Path Style="{StaticResource IconStyle}" Data="{StaticResource IconMoon}">
-                            <Path.Visibility>
-                                <Binding Path="IsLightTheme" Converter="{x:Static infra:InverseBoolToVisibilityConverter.Instance}"/>
-                            </Path.Visibility>
-                        </Path>
-                    </Grid>
-                </Button>
-                <Button Style="{StaticResource GhostButton}" ToolTip="重置序号"
-                        Margin="0,0,4,0"
-                        Command="{Binding ResetSequenceCommand}">
-                    <Path Style="{StaticResource IconStyle}" Data="{StaticResource IconReset}"/>
-                </Button>
                 <Button Style="{StaticResource GhostButton}" ToolTip="设置"
                         Margin="0,0,4,0"
                         Click="Settings_Click">
                     <Path Style="{StaticResource IconStyle}" Data="{StaticResource IconSettings}"/>
+                </Button>
+                <Button Style="{StaticResource GhostButton}" ToolTip="更多操作"
+                        Margin="0,0,4,0"
+                        Click="Overflow_Click">
+                    <Path Style="{StaticResource IconStyle}" Data="{StaticResource IconMore}"/>
+                    <Button.ContextMenu>
+                        <ContextMenu Placement="Bottom"
+                                     Style="{StaticResource {x:Type ContextMenu}}"
+                                     DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
+                            <MenuItem Header="清空普通队列" Command="{Binding ClearNormalCommand}" />
+                            <MenuItem Header="切换为亮色主题" Command="{Binding ToggleThemeCommand}"
+                                      Visibility="{Binding IsLightTheme, Converter={x:Static infra:InverseBoolToVisibilityConverter.Instance}}" />
+                            <MenuItem Header="切换为暗色主题" Command="{Binding ToggleThemeCommand}"
+                                      Visibility="{Binding IsLightTheme, Converter={x:Static infra:BoolToVisibilityConverter.Instance}}" />
+                            <MenuItem Header="重置序号" Command="{Binding ResetSequenceCommand}" />
+                            <Separator />
+                            <MenuItem Header="支持作者" Click="SupportAuthorMenu_Click" />
+                        </ContextMenu>
+                    </Button.ContextMenu>
                 </Button>
                 <ToggleButton Style="{StaticResource PillButton}"
                               IsChecked="{Binding ModeOn, Mode=TwoWay}"

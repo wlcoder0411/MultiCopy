@@ -88,10 +88,14 @@ public sealed class ClipboardListenerService
                 // 判定：文本与最近一次队列粘贴写入的内容相同，且在回音窗口内。
                 bool isEcho = _state.IsPasteEcho(text);
 
+                // 重复抑制：
+                // 1) 短窗口内同一文本（应用一次复制触发多次 WM_CLIPBOARDUPDATE）
+                // 2) 目标集合中已存在相同文本（Word 等应用在文档变更后可能重复广播同一剪贴板内容）
                 bool isDup = !isEcho
-                             && _lastEnqueuedText == text
-                             && _lastEnqueuedTicks > 0
-                             && (Environment.TickCount64 - _lastEnqueuedTicks) < DedupWindowMs;
+                             && ((_lastEnqueuedText == text
+                                  && _lastEnqueuedTicks > 0
+                                  && (Environment.TickCount64 - _lastEnqueuedTicks) < DedupWindowMs)
+                                 || IsTextAlreadyQueued(text));
 
                 if (!isEcho && !isDup)
                 {
@@ -157,6 +161,25 @@ public sealed class ClipboardListenerService
         }
         return IntPtr.Zero;
     }
+
+    /// <summary>
+    /// 目标集合（活动分组或未分组）中是否已存在相同文本。
+    /// 比较时统一换行并去掉末尾空白，避免 Word 重新广播时行尾差异导致漏判。
+    /// </summary>
+    private bool IsTextAlreadyQueued(string text)
+    {
+        string normalized = NormalizeForDedup(text);
+        var target = _queue.FindGroup(_state.ActiveGroupId)?.Items ?? _queue.UngroupedItems;
+        foreach (var item in target)
+        {
+            if (item is TextClipboardItem t && NormalizeForDedup(t.Text) == normalized)
+                return true;
+        }
+        return false;
+    }
+
+    private static string NormalizeForDedup(string text)
+        => text.Replace("\r\n", "\n").Replace('\r', '\n').TrimEnd();
 
     /// <summary>
     /// 图片去重：尺寸 + 哈希双校验，1500ms 窗口内判定为重复。

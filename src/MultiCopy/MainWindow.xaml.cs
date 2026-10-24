@@ -1,9 +1,11 @@
+using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using MultiCopy.Infrastructure;
 using MultiCopy.Models;
 using MultiCopy.Native;
@@ -29,6 +31,11 @@ public partial class MainWindow : Window
     private Rect _lastSavedBounds;
     private bool _lastSavedTopmost;
     private bool _hasSavedWindowState;
+
+    // 拖拽导出状态
+    private Point _dragStart;
+    private ClipboardItem? _dragItem;
+    private bool _suppressNextClick;
 
     public MainWindow()
     {
@@ -177,10 +184,18 @@ public partial class MainWindow : Window
         catch { /* 图标生成失败不影响运行 */ }
     }
 
-    // ---------- 支持作者：点击标题栏触发弹窗 ----------
-    private void SupportAuthor_Click(object sender, MouseButtonEventArgs e)
+    // ---------- 支持作者：溢出菜单触发弹窗 ----------
+    private void SupportAuthorMenu_Click(object sender, RoutedEventArgs e)
     {
         SupportDialog.Show(this);
+    }
+
+    /// <summary>「⋯」按钮：打开溢出菜单（低频操作收纳于此）。</summary>
+    private void Overflow_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button || button.ContextMenu == null) return;
+        button.ContextMenu.PlacementTarget = button;
+        button.ContextMenu.IsOpen = true;
     }
 
     // ---------- 快捷键说明 ----------
@@ -422,45 +437,154 @@ public partial class MainWindow : Window
         return ok;
     }
 
-    // ---------- 普通项：单击粘贴并移除 ----------
-    private void NormalItem_Click(object sender, MouseButtonEventArgs e)
+    // ---------- 条目：单击粘贴（普通项出队）/ 双击粘贴（置顶项保留） ----------
+    private void Item_Click(object sender, MouseButtonEventArgs e)
     {
         if (_vm == null) return;
-        // 双击时第二次点击（ClickCount=2）会落在已被第一条移除后补位上来的条目上，
-        // 若不拦截会连带吃掉队列里的下一条。仅响应单击。
-        if (e.ClickCount != 1) return;
-        // 点击落在图钉/删除按钮上时不处理（按钮已吞掉 MouseLeftButtonDown）
+        if (e.ChangedButton != MouseButton.Left) return;
+
+        // 拖拽结束后的鼠标抬起不再触发粘贴
+        if (_suppressNextClick)
+        {
+            _suppressNextClick = false;
+            return;
+        }
+
+        // 点击落在图钉/删除按钮上时不处理
         if (e.OriginalSource is DependencyObject d && FindAncestor<Button>(d) != null) return;
+        if (sender is not FrameworkElement fe || fe.DataContext is not ClipboardItem item) return;
+
+        bool keep = _vm.IsKeepAfterPaste(item);
+        // 普通项：仅单击；置顶项：仅双击
+        if (keep ? e.ClickCount < 2 : e.ClickCount != 1) return;
+
+        // 搜索框曾获焦时把焦点还给目标应用；前台未就绪时跳过粘贴并保留该项待重试
+        if (!RestoreTargetFocusBeforePaste())
+        {
+            (Application.Current as App)?.Tray?.ShowPasteBlockedTip();
+            return;
+        }
+
+        if (keep) _vm.PastePinnedItem(item);
+        else _vm.PasteNormalItem(item);
+    }
+
+    // ---------- 拖拽导出：把条目拖到目标窗口或文件夹 ----------
+    private void ItemDragStart(object sender, MouseButtonEventArgs e)
+    {
+        _suppressNextClick = false;
+
+        if (e.OriginalSource is DependencyObject d && FindAncestor<Button>(d) != null)
+        {
+            _dragItem = null;
+            return;
+        }
 
         if (sender is FrameworkElement fe && fe.DataContext is ClipboardItem item)
         {
-            // 搜索框曾获焦时把焦点还给目标应用；前台未就绪（仍是自身）时
-            // Ctrl+V 会发给 MultiCopy 自己，跳过粘贴并保留该项待用户重试
-            if (!RestoreTargetFocusBeforePaste())
-            {
-                (Application.Current as App)?.Tray?.ShowPasteBlockedTip();
-                return;
-            }
-            _vm.PasteNormalItem(item);
+            _dragStart = e.GetPosition(this);
+            _dragItem = item;
+        }
+        else
+        {
+            _dragItem = null;
         }
     }
 
-    // ---------- 置顶项：双击粘贴并保留（ClickCount==2 为双击；单击不做任何事） ----------
-    private void PinnedItem_DoubleClick(object sender, MouseButtonEventArgs e)
+    private void ItemDragMove(object sender, MouseEventArgs e)
     {
-        if (_vm == null) return;
-        if (e.ClickCount < 2) return; // 仅双击触发
-        if (e.OriginalSource is DependencyObject d && FindAncestor<Button>(d) != null) return;
+        if (_dragItem == null || e.LeftButton != MouseButtonState.Pressed) return;
 
-        if (sender is FrameworkElement fe && fe.DataContext is ClipboardItem item)
+        Point pos = e.GetPosition(this);
+        if (Math.Abs(pos.X - _dragStart.X) < SystemParameters.MinimumHorizontalDragDistance
+            && Math.Abs(pos.Y - _dragStart.Y) < SystemParameters.MinimumVerticalDragDistance)
+            return;
+
+        var item = _dragItem;
+        _dragItem = null;
+
+        var data = BuildDragData(item);
+        if (data == null) return;
+
+        _suppressNextClick = true;
+        DragDrop.DoDragDrop((DependencyObject)sender, data, DragDropEffects.Copy);
+    }
+
+    private static DataObject? BuildDragData(ClipboardItem item)
+    {
+        var data = new DataObject();
+        switch (item)
         {
-            // 前台未就绪（仍是自身）时跳过粘贴，保留项待重试（同 NormalItem_Click）
-            if (!RestoreTargetFocusBeforePaste())
+            case TextClipboardItem text:
+                data.SetData(DataFormats.UnicodeText, text.Text);
+                data.SetData(DataFormats.Text, text.Text);
+                data.SetData(DataFormats.StringFormat, text.Text);
+                // 附带 CF_HTML：部分 Web/Electron 输入框优先接受 text/html
+                data.SetData(DataFormats.Html, BuildHtmlClipboard(text.Text));
+                break;
+            case ImageClipboardItem img:
+                data.SetData(DataFormats.Bitmap, img.Image);
+                string? path = SaveTempPng(img);
+                if (path != null) data.SetData(DataFormats.FileDrop, new[] { path });
+                break;
+            default:
+                return null;
+        }
+        return data;
+    }
+
+    /// <summary>
+    /// 构造 CF_HTML 剪贴板字符串（含标准头部与 UTF-8 字节偏移）。
+    /// 部分 Web/Electron 输入框优先接受 text/html 拖拽数据。
+    /// </summary>
+    private static string BuildHtmlClipboard(string text)
+    {
+        string escaped = System.Net.WebUtility.HtmlEncode(text)
+            .Replace("\r\n", "<br>")
+            .Replace("\n", "<br>")
+            .Replace("\r", "<br>");
+
+        string html = "<html><body><!--StartFragment--><div>" + escaped
+                    + "</div><!--EndFragment--></body></html>";
+
+        const string headerFormat =
+            "Version:1.0\r\n" +
+            "StartHTML:{0:D10}\r\n" +
+            "EndHTML:{1:D10}\r\n" +
+            "StartFragment:{2:D10}\r\n" +
+            "EndFragment:{3:D10}\r\n";
+
+        // 偏移量为 10 位定宽，头部长度恒定为 startHtml
+        string probe = string.Format(headerFormat, 0, 0, 0, 0);
+        int startHtml = Encoding.UTF8.GetByteCount(probe);
+        int startFragment = startHtml + Encoding.UTF8.GetByteCount("<html><body><!--StartFragment-->");
+        int endFragment = startFragment + Encoding.UTF8.GetByteCount("<div>" + escaped + "</div>");
+        int endHtml = startHtml + Encoding.UTF8.GetByteCount(html);
+
+        string header = string.Format(headerFormat, startHtml, endHtml, startFragment, endFragment);
+        return header + html;
+    }
+
+    /// <summary>把图片写入临时 PNG，供拖到资源管理器等场景作为文件接收。</summary>
+    private static string? SaveTempPng(ImageClipboardItem item)
+    {
+        try
+        {
+            string dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "MultiCopy", "drag");
+            System.IO.Directory.CreateDirectory(dir);
+            string path = System.IO.Path.Combine(dir, item.Id + ".png");
+            if (!System.IO.File.Exists(path))
             {
-                (Application.Current as App)?.Tray?.ShowPasteBlockedTip();
-                return;
+                var encoder = new PngBitmapEncoder();
+                encoder.Frames.Add(BitmapFrame.Create(item.Image));
+                using var stream = System.IO.File.Create(path);
+                encoder.Save(stream);
             }
-            _vm.PastePinnedItem(item);
+            return path;
+        }
+        catch
+        {
+            return null;
         }
     }
 

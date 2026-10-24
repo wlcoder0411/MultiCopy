@@ -59,7 +59,8 @@
                 <TextBlock Style="{StaticResource HelpText}">
                     <Run Style="{StaticResource KeyRun}" Text="单击普通项" /><Run Text="　粘贴并从队列移除" /><LineBreak />
                     <Run Style="{StaticResource KeyRun}" Text="双击置顶项" /><Run Text="　粘贴但保留" /><LineBreak />
-                    <Run Style="{StaticResource KeyRun}" Text="右键条目" /><Run Text="　置顶、移动到分组、删除" />
+                    <Run Style="{StaticResource KeyRun}" Text="右键条目" /><Run Text="　置顶、移动到分组、按行拆分（文本）、删除" /><LineBreak />
+                    <Run Style="{StaticResource KeyRun}" Text="拖拽条目" /><Run Text="　导出到目标窗口输入框或文件夹" />
                 </TextBlock>
 
                 <TextBlock Style="{StaticResource SectionHeader}" Text="使用提示" />
@@ -67,6 +68,7 @@
                     <Run Text="• 序号固定按「置顶 → 未分组 → 各分组」排序，搜索或折叠不会改变编号。" /><LineBreak />
                     <Run Text="• 窗口隐藏到托盘时监控暂停，Ctrl+V 也随之暂停。" /><LineBreak />
                     <Run Text="• Ctrl+Z 与方向键仅在窗口内生效；粘贴后可按 Alt+Z 回到窗口撤销。" /><LineBreak />
+                    <Run Text="• 同一分组内相同文本会自动去重，不会重复入队。" /><LineBreak />
                     <Run Text="• 队列上限 30 条，顶部显示当前容量，满后请在顶部清空或删除条目。" />
                 </TextBlock>
             </StackPanel>

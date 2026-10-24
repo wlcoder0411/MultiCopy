@@ -4,6 +4,7 @@ using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Data;
+using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using MultiCopy.Models;
@@ -45,9 +46,8 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private bool _isMonitoring;
 
-    /// <summary>是否为亮色主题（绑定主题按钮图标显示）。</summary>
-    [ObservableProperty]
-    private bool _isLightTheme;
+    /// <summary>是否为亮色主题（用于主题切换菜单的动态文案）。</summary>
+    public bool IsLightTheme => ThemeService.CurrentTheme == AppTheme.Light;
 
     /// <summary>是否存在任何分组（决定渲染模式：扁平 vs 分组）。</summary>
     [ObservableProperty]
@@ -76,6 +76,9 @@ public sealed partial class MainViewModel : ObservableObject
     /// <summary>键盘导航当前选中项（null=无选中）。</summary>
     [ObservableProperty]
     private ClipboardItem? _selectedItem;
+
+    /// <summary>相对时间刷新定时器（30 秒）。</summary>
+    private readonly DispatcherTimer _relativeTimeTimer;
 
     /// <summary>容量指示文本（如 "18/30"）。</summary>
     [ObservableProperty]
@@ -138,9 +141,14 @@ public sealed partial class MainViewModel : ObservableObject
         _isMonitoring = _state.IsMonitoring;
         _state.MonitoringChanged += OnAppStateMonitoringChanged;
         ThemeService.ThemeChanged += OnThemeChanged;
-        IsLightTheme = ThemeService.CurrentTheme == AppTheme.Light;
         _queue.Changed += OnQueueChanged;
         _queue.Groups.CollectionChanged += OnGroupsChanged;
+
+        // 相对时间每 30 秒刷新一次，保证「刚刚 / N 分钟前」近似实时
+        _relativeTimeTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
+        _relativeTimeTimer.Tick += (_, _) => UpdateRelativeTimes();
+        _relativeTimeTimer.Start();
+
         UpdateStates();
     }
 
@@ -148,8 +156,9 @@ public sealed partial class MainViewModel : ObservableObject
 
     private void OnAppStateMonitoringChanged(object? sender, bool value) => IsMonitoring = value;
 
+    /// <summary>主题变化时刷新溢出菜单中主题项的可视性。</summary>
     private void OnThemeChanged(object? sender, EventArgs e)
-        => IsLightTheme = ThemeService.CurrentTheme == AppTheme.Light;
+        => OnPropertyChanged(nameof(IsLightTheme));
 
     [RelayCommand]
     private void ToggleTheme()
@@ -294,6 +303,8 @@ public sealed partial class MainViewModel : ObservableObject
             : (CanUndo ? "可撤销上一步 · Ctrl+Z 撤销 · 点击此处查看全部快捷键" : DefaultOperationHint);
         // 列表展示序号（置顶 → 未分组 → 各分组，连续编号）
         RefreshDisplayIndexes();
+        // 相对时间（入队/撤销后立即刷新，定时器负责周期更新）
+        UpdateRelativeTimes();
         // 搜索专属属性刷新
         OnPropertyChanged(nameof(IsSearching));
         OnPropertyChanged(nameof(SearchNoResult));
@@ -365,6 +376,28 @@ public sealed partial class MainViewModel : ObservableObject
         {
             item.DisplayIndex = index++;
         }
+    }
+
+    /// <summary>刷新所有条目的相对时间文本。</summary>
+    private void UpdateRelativeTimes()
+    {
+        var now = DateTime.Now;
+        foreach (var item in AllItems())
+            item.RelativeTime = FormatRelativeTime(item.CreatedAt, now);
+    }
+
+    /// <summary>把复制时间格式化为「刚刚 / N 分钟前 / N 小时前 / 昨天 / 日期」。</summary>
+    private static string FormatRelativeTime(DateTime createdAt, DateTime now)
+    {
+        TimeSpan span = now - createdAt;
+        if (span < TimeSpan.Zero) span = TimeSpan.Zero;
+
+        if (span.TotalSeconds < 60) return "刚刚";
+        if (span.TotalMinutes < 60) return $"{(int)span.TotalMinutes} 分钟前";
+        if (span.TotalHours < 24) return $"{(int)span.TotalHours} 小时前";
+        if (createdAt.Date == now.Date.AddDays(-1)) return "昨天";
+        if (createdAt.Year == now.Year) return $"{createdAt.Month}月{createdAt.Day}日";
+        return $"{createdAt.Year}/{createdAt.Month}/{createdAt.Day}";
     }
 
     /// <summary>按方向移动键盘选择（delta=+1 向下，-1 向上）。</summary>
@@ -485,6 +518,34 @@ public sealed partial class MainViewModel : ObservableObject
         if (restored != null)
             SelectedItem = restored;
     }
+
+    /// <summary>把文本条目按行拆分为多条（去掉空行与首尾空白，最多 100 行）。</summary>
+    [RelayCommand(CanExecute = nameof(CanSplitLines))]
+    private void SplitLines(ClipboardItem? item)
+    {
+        if (item is not TextClipboardItem textItem) return;
+
+        var lines = textItem.Text
+            .Replace("\r\n", "\n")
+            .Replace('\r', '\n')
+            .Split('\n')
+            .Select(line => line.Trim())
+            .Where(line => line.Length > 0)
+            .ToList();
+
+        if (lines.Count <= 1) return;
+        if (lines.Count > 100)
+        {
+            MessageBox.Show(Application.Current?.MainWindow,
+                "单条内容最多拆分为 100 行，请先手动精简。",
+                "按行拆分", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        _queue.SplitIntoLines(textItem, lines);
+    }
+
+    private static bool CanSplitLines(ClipboardItem? item) => item is TextClipboardItem;
 
     /// <summary>关闭首次使用引导，并持久化「已看过」标记。</summary>
     [RelayCommand]

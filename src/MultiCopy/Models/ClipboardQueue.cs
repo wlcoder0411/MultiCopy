@@ -212,6 +212,43 @@ public sealed class ClipboardQueue
                 yield return item;
     }
 
+    /// <summary>
+    /// 把一条文本按行拆分为多条，按原位置插入（保留来源应用与创建时间）。
+    /// 拆分属于批量变更，会清空撤销栈，避免撤销后状态不一致。
+    /// </summary>
+    public bool SplitIntoLines(TextClipboardItem item, IReadOnlyList<string> lines)
+    {
+        if (lines.Count == 0) return false;
+
+        ClipboardGroup? group = null;
+        int index = UngroupedItems.IndexOf(item);
+        if (index < 0)
+        {
+            foreach (var g in Groups)
+            {
+                index = g.Items.IndexOf(item);
+                if (index >= 0)
+                {
+                    group = g;
+                    break;
+                }
+            }
+        }
+        if (index < 0) return false;
+
+        var target = group?.Items ?? UngroupedItems;
+        target.RemoveAt(index);
+        for (int i = 0; i < lines.Count; i++)
+        {
+            target.Insert(index + i,
+                new TextClipboardItem(lines[i], item.SourceApp, item.CreatedAt));
+        }
+
+        ClearRemovalHistory();
+        OnChanged();
+        return true;
+    }
+
     /// <summary>查询项当前所属分组 Id（null=未分组或不属于任何集合）。</summary>
     public string? GetGroupIdOf(ClipboardItem item)
     {
