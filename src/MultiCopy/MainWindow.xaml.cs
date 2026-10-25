@@ -657,6 +657,84 @@ public partial class MainWindow : Window
         e.Handled = true;
     }
 
+    // ---------- 标签栏：拖拽重排普通分组 ----------
+    // 规则（与用户约定一致）：「全部」「置顶」等固定标签与置顶分组不可拖动也不可落放；
+    // 仅普通分组标签可在普通分组区间内拖动重排。模式复用条目拖拽：
+    // 按下记录起点 → 位移超系统阈值才发起 DoDragDrop → 置位抑制标记防止拖后误触发选中。
+    private ClipboardTab? _tabDragItem;
+    private Point _tabDragStart;
+    private bool _suppressTabClick;
+
+    private const string TabDragFormat = "MultiCopyTab";
+
+    /// <summary>当前标签是否为可拖动/可落放的普通分组标签。</summary>
+    private static bool IsMovableGroupTab(object? sender) =>
+        sender is FrameworkElement fe
+        && fe.DataContext is ClipboardTab { Kind: ClipboardTabKind.Group, Group.IsPinned: false };
+
+    private void Tab_Click(object sender, RoutedEventArgs e)
+    {
+        if (_vm == null) return;
+        if (_suppressTabClick)
+        {
+            // 拖拽结束后的鼠标抬起不再触发选中（下次按下时在 TabDragStart 复位）
+            return;
+        }
+        if (sender is FrameworkElement fe && fe.DataContext is ClipboardTab tab)
+            _vm.SelectTabCommand.Execute(tab);
+    }
+
+    private void TabDragStart(object sender, MouseButtonEventArgs e)
+    {
+        _tabDragItem = null;
+        _suppressTabClick = false; // 每次按下先复位，防止上一次拖拽的残留标记吞掉本次点击
+
+        if (_vm == null) return;
+        if (sender is FrameworkElement fe && IsMovableGroupTab(fe))
+        {
+            _tabDragStart = e.GetPosition(this);
+            _tabDragItem = (ClipboardTab)fe.DataContext;
+        }
+    }
+
+    private void TabDragMove(object sender, MouseEventArgs e)
+    {
+        if (_tabDragItem == null || e.LeftButton != MouseButtonState.Pressed) return;
+
+        Point pos = e.GetPosition(this);
+        if (Math.Abs(pos.X - _tabDragStart.X) < SystemParameters.MinimumHorizontalDragDistance
+            && Math.Abs(pos.Y - _tabDragStart.Y) < SystemParameters.MinimumVerticalDragDistance)
+            return;
+
+        var tab = _tabDragItem;
+        _tabDragItem = null;
+        _suppressTabClick = true;
+        DragDrop.DoDragDrop((DependencyObject)sender, new DataObject(TabDragFormat, tab), DragDropEffects.Move);
+    }
+
+    private void Tab_DragOver(object sender, DragEventArgs e)
+    {
+        // 只有普通分组标签接受落放：固定标签/置顶分组不改变顺序
+        e.Effects = IsMovableGroupTab(sender) && e.Data.GetDataPresent(TabDragFormat)
+            ? DragDropEffects.Move
+            : DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private void Tab_Drop(object sender, DragEventArgs e)
+    {
+        e.Handled = true;
+        if (_vm == null) return;
+        if (!IsMovableGroupTab(sender)) return;
+        if (e.Data.GetData(TabDragFormat) is not ClipboardTab sourceTab) return;
+        if (sender is not FrameworkElement fe || fe.DataContext is not ClipboardTab targetTab) return;
+
+        // 光标落在目标左半侧=插到目标之前，右半侧=插到目标之后
+        Point pos = e.GetPosition(fe);
+        bool before = pos.X < fe.ActualWidth / 2;
+        _vm.MoveGroup(sourceTab.Group!, targetTab.Group!, before);
+    }
+
     // ---------- 图像空格预览 ----------
     /// <summary>开/关选中图像项的大图预览。预览窗不抢焦点，目标应用的键盘焦点不受影响。</summary>
     private void ToggleImagePreview(ImageClipboardItem item)

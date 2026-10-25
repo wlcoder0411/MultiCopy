@@ -451,6 +451,34 @@ public sealed class ClipboardQueue
         return n;
     }
 
+    /// <summary>
+    /// 拖拽重排分组标签：把 source 分组移动到 target 分组之前/之后。
+    /// 约束（与用户约定一致）：置顶分组固定在普通分组之前且不可移动，
+    /// 因此仅普通分组可移动，目标索引收敛到普通分组区间 [置顶分组数, 总数-1]。
+    /// 顺序变化经 Changed 事件即时持久化（分组指纹包含顺序）。
+    /// </summary>
+    public void MoveGroup(ClipboardGroup source, ClipboardGroup target, bool beforeTarget)
+    {
+        if (source == null || target == null) return;
+        if (source.IsPinned || target.IsPinned) return;
+        if (ReferenceEquals(source, target)) return;
+        if (!Groups.Contains(source) || !Groups.Contains(target)) return;
+
+        int sourceIndex = Groups.IndexOf(source);
+        int targetIndex = Groups.IndexOf(target);
+
+        // Move 先移除再插入：目标在源之后时，插入位相应前移/后移一位
+        int newIndex = beforeTarget
+            ? (sourceIndex < targetIndex ? targetIndex - 1 : targetIndex)
+            : (sourceIndex < targetIndex ? targetIndex : targetIndex + 1);
+
+        newIndex = Math.Clamp(newIndex, CountPinnedGroups(), Groups.Count - 1);
+        if (newIndex == sourceIndex) return;
+
+        Groups.Move(sourceIndex, newIndex);
+        OnChanged();
+    }
+
     // ---------- 内部：跨集合移除不触发 OnChanged（供 Pin 复用） ----------
 
     private bool RemoveNormalInternal(ClipboardItem item)

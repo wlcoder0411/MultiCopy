@@ -51,11 +51,17 @@
                       CommandParameter="{Binding PlacementTarget.DataContext.Group, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
         </ContextMenu>
 
-        <!-- ============ 顶部标签：药丸按钮 + 📌 标记 + 活动分组圆点 ============ -->
+        <!-- ============ 顶部标签：药丸按钮 + 📌 标记 + 活动分组圆点 ============
+             点击经 Tab_Click 处理（拖拽后需抑制误触，见 TabDragMove）；
+             仅普通分组标签可拖拽重排（约束判断在 TabDragStart / Tab_DragOver） -->
         <DataTemplate x:Key="TabItemTemplate" DataType="{x:Type vm:ClipboardTab}">
             <Button x:Name="TabPill" Style="{StaticResource TabPill}"
-                    Command="{Binding DataContext.SelectTabCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                    CommandParameter="{Binding}"
+                    Click="Tab_Click"
+                    PreviewMouseLeftButtonDown="TabDragStart"
+                    PreviewMouseMove="TabDragMove"
+                    AllowDrop="True"
+                    DragOver="Tab_DragOver"
+                    Drop="Tab_Drop"
                     Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType=Window}}">
                 <StackPanel Orientation="Horizontal">
                     <Path Style="{StaticResource IconStyle}" Data="{StaticResource IconPin}"

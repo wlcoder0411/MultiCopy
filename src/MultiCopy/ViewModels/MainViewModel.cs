@@ -644,6 +644,10 @@ public sealed partial class MainViewModel : ObservableObject
     /// <summary>普通项右键"移动到分组"：移到目标分组（视图调用，因需动态构建子菜单）。</summary>
     public void MoveItem(ClipboardItem item, string? targetGroupId) => _queue.MoveItem(item, targetGroupId);
 
+    /// <summary>拖拽分组标签重排：source 移到 target 之前/之后（视图调用，约束由队列层保证）。</summary>
+    public void MoveGroup(ClipboardGroup source, ClipboardGroup target, bool beforeTarget)
+        => _queue.MoveGroup(source, target, beforeTarget);
+
     /// <summary>查询项当前所属分组 Id（null=未分组）。供视图构建移动子菜单时标记当前位置。</summary>
     public string? GetGroupIdOf(ClipboardItem item) => _queue.GetGroupIdOf(item);
 
