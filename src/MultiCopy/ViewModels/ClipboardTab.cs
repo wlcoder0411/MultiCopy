@@ -10,8 +10,6 @@ public enum ClipboardTabKind
     All,
     /// <summary>置顶项（纯查看筛选）。</summary>
     Pinned,
-    /// <summary>未分组项（对应"无活动分组"全局模式）。</summary>
-    Ungrouped,
     /// <summary>用户分组（点击设为活动分组；置顶分组仅查看）。</summary>
     Group,
     /// <summary>智能筛选：非链接文本（纯查看）。</summary>

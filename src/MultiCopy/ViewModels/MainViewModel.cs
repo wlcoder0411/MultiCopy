@@ -211,10 +211,6 @@ public sealed partial class MainViewModel : ObservableObject
                 AddRows(PinnedItems.Select(i => (i, (ClipboardGroup?)null)), keyword);
                 break;
 
-            case ClipboardTabKind.Ungrouped:
-                AddRows(UngroupedItems.Select(i => (i, (ClipboardGroup?)null)), keyword);
-                break;
-
             case ClipboardTabKind.Group:
                 AddRows(tabGroup!.Items.Select(i => (i, (ClipboardGroup?)tabGroup)), keyword);
                 break;
@@ -311,8 +307,9 @@ public sealed partial class MainViewModel : ObservableObject
     }
 
     /// <summary>
-    /// 重建标签栏：全部 → 置顶 → 未分组（仅有分组时）→ 各分组（Groups 顺序，置顶分组在前）
-    /// → 文本/图像/链接智能筛选。按 TabId 恢复选中；被删分组的选中回退到「全部」。
+    /// 重建标签栏：全部 → 置顶 → 各分组（Groups 顺序，置顶分组在前）→ 文本/图像/链接智能筛选。
+    /// 未分组内容统一由「全部」承载（全局模式下新复制内容本就落入未分组集合）。
+    /// 按 TabId 恢复选中；被删分组的选中回退到「全部」。
     /// </summary>
     private void RebuildTabs()
     {
@@ -321,8 +318,6 @@ public sealed partial class MainViewModel : ObservableObject
 
         Tabs.Add(new ClipboardTab(ClipboardTabKind.All, "全部"));
         Tabs.Add(new ClipboardTab(ClipboardTabKind.Pinned, "置顶"));
-        if (Groups.Count > 0)
-            Tabs.Add(new ClipboardTab(ClipboardTabKind.Ungrouped, "未分组"));
         foreach (var g in Groups)
             Tabs.Add(new ClipboardTab(g));
         Tabs.Add(new ClipboardTab(ClipboardTabKind.TypeText, "文本"));
@@ -341,7 +336,6 @@ public sealed partial class MainViewModel : ObservableObject
     private (string Text, string Hint) BuildEmptyStateCopy() => (SelectedTab?.Kind ?? ClipboardTabKind.All) switch
     {
         ClipboardTabKind.Pinned => ("暂无置顶内容", "右键普通条目选择「置顶」，常驻内容会跨会话保留"),
-        ClipboardTabKind.Ungrouped => ("未分组暂无内容", "在任意应用按 Ctrl+C 即可收集到这里"),
         ClipboardTabKind.Group => ("该分组暂无内容", "选中此分组标签后，新复制的内容会归入该组"),
         ClipboardTabKind.TypeText => ("暂无文本内容", "复制文本后会出现在这里"),
         ClipboardTabKind.TypeImage => ("暂无图像内容", "复制或截图后会出现在这里；选中后按空格可预览大图"),
@@ -584,9 +578,9 @@ public sealed partial class MainViewModel : ObservableObject
     /// <summary>
     /// 切换顶部标签（标签栏点击）。语义映射：
     /// - 分组标签 = 设为活动分组（置顶分组除外：仅查看，不改变采集目标）；
-    /// - 全部 / 未分组 = 清空活动分组（回到全局采集 + 全局 FIFO）；
+    /// - 全部 = 清空活动分组（回到全局采集 + 全局 FIFO）；
     /// - 置顶 / 文本 / 图像 / 链接 = 纯查看筛选，不改变采集目标。
-    /// 退出分组模式的通道 = 点「全部」或「未分组」标签，无需再提供"再点一次取消"。
+    /// 退出分组模式的通道 = 点「全部」。
     /// </summary>
     [RelayCommand]
     private void SelectTab(ClipboardTab? tab)
@@ -600,7 +594,6 @@ public sealed partial class MainViewModel : ObservableObject
         switch (tab.Kind)
         {
             case ClipboardTabKind.All:
-            case ClipboardTabKind.Ungrouped:
                 _state.ActiveGroupId = null;
                 break;
             case ClipboardTabKind.Group when tab.Group is { IsPinned: false } g:

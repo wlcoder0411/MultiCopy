@@ -447,7 +447,7 @@
             </Grid>
         </Border>
 
-        <!-- 标签栏：全部 / 置顶 / 未分组 / 各分组 / 类型筛选 + 新建分组；
+        <!-- 标签栏：全部 / 置顶 / 各分组 / 类型筛选 + 新建分组；
              溢出时横向滚动（滚动条隐藏，滚轮横滚，见 TabScroll_PreviewMouseWheel） -->
         <ScrollViewer Grid.Row="2" x:Name="TabScroll"
                       Margin="12,2,12,4"
