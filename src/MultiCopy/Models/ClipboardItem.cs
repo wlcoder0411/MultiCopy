@@ -50,11 +50,28 @@ public sealed partial class TextClipboardItem : ClipboardItem
     /// <summary>完整文本内容。</summary>
     public string Text { get; }
 
+    /// <summary>是否为链接（单行无空白的 http/https 绝对 URI）。创建时判定，供「链接」标签筛选用。</summary>
+    public bool IsLink { get; }
+
     public TextClipboardItem(string text, string sourceApp, DateTime? createdAt = null)
         : base(sourceApp, createdAt)
     {
         Text = text ?? string.Empty;
         Preview = BuildPreview(Text);
+        IsLink = ComputeIsLink(Text);
+    }
+
+    /// <summary>
+    /// 链接判定：单行（无换行）、不含空白字符，且能解析为 http/https 绝对 URI。
+    /// 仅接受显式协议前缀，避免把"file.txt"这类普通词误判为链接。
+    /// </summary>
+    private static bool ComputeIsLink(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return false;
+        if (text.Contains('\r') || text.Contains('\n') || text.IndexOfAny([' ', '\t']) >= 0) return false;
+        if (!text.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+            && !text.StartsWith("https://", StringComparison.OrdinalIgnoreCase)) return false;
+        return Uri.TryCreate(text, UriKind.Absolute, out _);
     }
 
     private static string BuildPreview(string text)

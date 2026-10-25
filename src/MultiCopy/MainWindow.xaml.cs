@@ -39,6 +39,9 @@ public partial class MainWindow : Window
     private bool _suppressNextClick;
     private long _normalClickCooldownUntil;
 
+    // 图像空格预览窗（ShowActivated=False + WS_EX_NOACTIVATE，不抢目标应用焦点）
+    private ImagePreviewWindow? _imagePreview;
+
     public MainWindow()
     {
         InitializeComponent();
@@ -85,6 +88,7 @@ public partial class MainWindow : Window
                     _searchActive = false;
                     ApplyNoActivate();
                 }
+                CloseImagePreview(); // 预览窗不独立存活，随主窗口隐藏一并关闭
                 SaveWindowState();
             }
             _targetHwndBeforeSearch = IntPtr.Zero;
@@ -95,10 +99,14 @@ public partial class MainWindow : Window
     {
         if (_vm == null) return;
 
-        // Esc：先清空搜索，再隐藏窗口
+        // Esc：先关预览，再清空搜索，最后隐藏窗口
         if (e.Key == Key.Escape)
         {
-            if (!string.IsNullOrEmpty(SearchBox.Text))
+            if (_imagePreview != null)
+            {
+                CloseImagePreview();
+            }
+            else if (!string.IsNullOrEmpty(SearchBox.Text))
             {
                 SearchBox.Text = string.Empty;
                 SearchBox.Focus();
@@ -130,6 +138,18 @@ public partial class MainWindow : Window
         if (ctrl && e.Key == Key.Z && (!searchFocused || !searchHasText))
         {
             _vm.UndoLastRemovalCommand.Execute(null);
+            e.Handled = true;
+            return;
+        }
+
+        // 空格：预览选中的图像项（PasteNow 式）。焦点在搜索框时是输入字符、
+        // 在按钮上时是激活按钮，均不拦截；非图像项保持系统默认行为。
+        if (e.Key == Key.Space
+            && !searchFocused
+            && Keyboard.FocusedElement is not ButtonBase
+            && _vm.SelectedItem is ImageClipboardItem previewTarget)
+        {
+            ToggleImagePreview(previewTarget);
             e.Handled = true;
             return;
         }
@@ -186,11 +206,20 @@ public partial class MainWindow : Window
         catch { /* 图标生成失败不影响运行 */ }
     }
 
-    /// <summary>选择变化（自动续选/撤销恢复）时把对应行滚动到可见区域。</summary>
+    /// <summary>选择变化（自动续选/撤销恢复）时把对应行滚动到可见区域；预览打开时同步换图。</summary>
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(MainViewModel.SelectedEntry) && _vm?.SelectedEntry != null)
+        if (e.PropertyName != nameof(MainViewModel.SelectedEntry)) return;
+
+        if (_vm?.SelectedEntry != null)
             ResultsList.ScrollIntoView(_vm.SelectedEntry);
+
+        // 预览窗跟随选择：切到其他图像换大图，切到非图像项则关闭
+        if (_imagePreview == null) return;
+        if (_vm?.SelectedItem is ImageClipboardItem imageItem)
+            _imagePreview.SetItem(imageItem);
+        else
+            CloseImagePreview();
     }
 
     // ---------- 支持作者：溢出菜单触发弹窗 ----------
@@ -616,28 +645,36 @@ public partial class MainWindow : Window
         }
     }
 
-    // ---------- 分组头：单击设为活动分组（新复制内容归入此组） ----------
-    private void GroupHeader_Click(object sender, MouseButtonEventArgs e)
+    // ---------- 标签栏：滚轮横向滚动（溢出时） ----------
+    private void TabScroll_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
     {
-        if (_vm == null) return;
-        // 箭头列已自行处理并标记 Handled，这里不会再收到；按钮命中不处理
-        if (e.OriginalSource is DependencyObject d && FindAncestor<Button>(d) != null) return;
-
-        if (sender is FrameworkElement fe && fe.DataContext is ClipboardHeaderRow { Group: { } g })
-        {
-            _vm.SetActiveGroupCommand.Execute(g);
-        }
+        // 无横向溢出时不吞事件，让滚轮继续走默认路径
+        if (TabScroll.ScrollableWidth <= 0) return;
+        TabScroll.ScrollToHorizontalOffset(TabScroll.HorizontalOffset - e.Delta / 3.0);
+        e.Handled = true;
     }
 
-    // ---------- 分组箭头：单击切换折叠/展开（阻止冒泡到分组头） ----------
-    private void GroupArrow_Click(object sender, MouseButtonEventArgs e)
+    // ---------- 图像空格预览 ----------
+    /// <summary>开/关选中图像项的大图预览。预览窗不抢焦点，目标应用的键盘焦点不受影响。</summary>
+    private void ToggleImagePreview(ImageClipboardItem item)
     {
-        if (_vm == null) return;
-        e.Handled = true; // 阻止冒泡到 GroupHeader_Click
-        if (sender is FrameworkElement fe && fe.DataContext is ClipboardHeaderRow { Group: { } g })
+        if (_imagePreview != null)
         {
-            _vm.ToggleGroupExpandCommand.Execute(g);
+            CloseImagePreview();
+            return;
         }
+        _imagePreview = new ImagePreviewWindow();
+        _imagePreview.SetItem(item);
+        _imagePreview.PlaceNear(this);
+        _imagePreview.Closed += (_, _) => _imagePreview = null;
+        _imagePreview.Show();
+    }
+
+    /// <summary>关闭图像预览窗（Esc/空格、选择切走、主窗口隐藏或关闭时调用）。</summary>
+    private void CloseImagePreview()
+    {
+        _imagePreview?.Close();
+        _imagePreview = null;
     }
 
     // ---------- 普通项右键菜单：动态构建"移动到分组…"子菜单 ----------
@@ -795,10 +832,12 @@ public partial class MainWindow : Window
         if (app != null && !app.ForceExit)
         {
             e.Cancel = true;
+            CloseImagePreview();
             Hide(); // 最小化到托盘（Hide 内部会保存窗口状态）
         }
         else
         {
+            CloseImagePreview();
             SaveWindowState();
         }
     }

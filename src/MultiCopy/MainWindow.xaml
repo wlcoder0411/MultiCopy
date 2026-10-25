@@ -18,6 +18,70 @@
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="Bool2Vis" />
 
+        <!-- 分组标签右键菜单：PlacementTarget = 标签 Button（Tag = 窗口 DataContext，DataContext = ClipboardTab）。
+             仅分组标签通过 DataTemplate.Triggers 挂载本菜单 -->
+        <ContextMenu x:Key="TabGroupMenu">
+            <MenuItem Header="置顶"
+                      Command="{Binding PlacementTarget.Tag.PinGroupCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                      CommandParameter="{Binding PlacementTarget.DataContext.Group, RelativeSource={RelativeSource AncestorType=ContextMenu}}">
+                <MenuItem.Visibility>
+                    <Binding Path="PlacementTarget.DataContext.Group.IsPinned"
+                             RelativeSource="{RelativeSource AncestorType=ContextMenu}"
+                             Converter="{x:Static infra:InverseBoolToVisibilityConverter.Instance}" />
+                </MenuItem.Visibility>
+            </MenuItem>
+            <MenuItem Header="取消置顶"
+                      Command="{Binding PlacementTarget.Tag.UnpinGroupCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                      CommandParameter="{Binding PlacementTarget.DataContext.Group, RelativeSource={RelativeSource AncestorType=ContextMenu}}">
+                <MenuItem.Visibility>
+                    <Binding Path="PlacementTarget.DataContext.Group.IsPinned"
+                             RelativeSource="{RelativeSource AncestorType=ContextMenu}"
+                             Converter="{StaticResource Bool2Vis}" />
+                </MenuItem.Visibility>
+            </MenuItem>
+            <MenuItem Header="重命名"
+                      Command="{Binding PlacementTarget.Tag.RenameGroupCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                      CommandParameter="{Binding PlacementTarget.DataContext.Group, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+            <MenuItem Header="清空组内项"
+                      Command="{Binding PlacementTarget.Tag.ClearGroupCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                      CommandParameter="{Binding PlacementTarget.DataContext.Group, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+            <Separator />
+            <MenuItem Header="删除分组"
+                      Command="{Binding PlacementTarget.Tag.DeleteGroupCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                      CommandParameter="{Binding PlacementTarget.DataContext.Group, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+        </ContextMenu>
+
+        <!-- ============ 顶部标签：药丸按钮 + 📌 标记 + 活动分组圆点 ============ -->
+        <DataTemplate x:Key="TabItemTemplate" DataType="{x:Type vm:ClipboardTab}">
+            <Button x:Name="TabPill" Style="{StaticResource TabPill}"
+                    Command="{Binding DataContext.SelectTabCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                    CommandParameter="{Binding}"
+                    Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType=Window}}">
+                <StackPanel Orientation="Horizontal">
+                    <Path Style="{StaticResource IconStyle}" Data="{StaticResource IconPin}"
+                          Width="11" Height="11" Margin="0,0,4,0"
+                          Stroke="{DynamicResource PinBrush}" Fill="{DynamicResource PinBrush}"
+                          Visibility="{Binding ShowPin, Converter={StaticResource Bool2Vis}}" />
+                    <TextBlock VerticalAlignment="Center" Text="{Binding Title}"
+                               Visibility="{Binding IsGroupTab, Converter={x:Static infra:InverseBoolToVisibilityConverter.Instance}}" />
+                    <TextBlock VerticalAlignment="Center" Text="{Binding Group.Name}"
+                               Visibility="{Binding IsGroupTab, Converter={StaticResource Bool2Vis}}" />
+                    <Ellipse Width="6" Height="6" Margin="5,0,0,0" VerticalAlignment="Center"
+                             Fill="{DynamicResource AccentBrush}"
+                             Visibility="{Binding Group.IsActiveGroup, Converter={StaticResource Bool2Vis}, FallbackValue=Collapsed}" />
+                </StackPanel>
+            </Button>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding Kind}" Value="Group">
+                    <Setter TargetName="TabPill" Property="ContextMenu" Value="{StaticResource TabGroupMenu}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsPinnedGroup}" Value="True">
+                    <Setter TargetName="TabPill" Property="ToolTip"
+                            Value="置顶分组：内容跨会话保留、不参与自动出队；不接收新复制内容" />
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+
         <!-- 列表项容器：去掉默认选中高亮，由条目模板的选中环负责 -->
         <Style x:Key="ClipboardListBoxItem" TargetType="ListBoxItem">
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
@@ -264,140 +328,17 @@
             </DataTemplate.Triggers>
         </DataTemplate>
 
-        <!-- ============ 区域标题行 ============ -->
+        <!-- ============ 区域标题行 ============
+             分组已改为顶部标签栏，此模板仅在「全部」标签渲染置顶小节标题 -->
         <DataTemplate x:Key="HeaderTemplate" DataType="{x:Type vm:ClipboardHeaderRow}">
-            <Border x:Name="header" MouseLeftButtonDown="GroupHeader_Click"
-                    Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType=Window}}">
-                <Border.Style>
-                    <Style TargetType="Border">
-                        <Setter Property="Background" Value="Transparent" />
-                        <Setter Property="BorderBrush" Value="Transparent" />
-                        <Setter Property="BorderThickness" Value="0" />
-                        <Setter Property="CornerRadius" Value="6" />
-                        <Setter Property="Margin" Value="12,8,0,2" />
-                        <Setter Property="Padding" Value="0" />
-                        <Style.Triggers>
-                            <DataTrigger Binding="{Binding IsGroup}" Value="True">
-                                <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}" />
-                                <Setter Property="Margin" Value="8,4,8,2" />
-                                <Setter Property="Padding" Value="8,5" />
-                                <Setter Property="Cursor" Value="Hand" />
-                            </DataTrigger>
-                            <DataTrigger Binding="{Binding Group.IsActiveGroup}" Value="True">
-                                <Setter Property="Background" Value="{DynamicResource AccentBackgroundBrush}" />
-                                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
-                                <Setter Property="BorderThickness" Value="2,0,0,0" />
-                            </DataTrigger>
-                            <DataTrigger Binding="{Binding Group.IsPinned}" Value="True">
-                                <Setter Property="Background" Value="{DynamicResource PinBackgroundBrush}" />
-                                <Setter Property="BorderBrush" Value="{DynamicResource PinBrush}" />
-                                <Setter Property="BorderThickness" Value="2,0,0,0" />
-                            </DataTrigger>
-                        </Style.Triggers>
-                    </Style>
-                </Border.Style>
-
-                <Grid>
-                <!-- 置顶 / 未分组标题 -->
-                <StackPanel x:Name="sectionPanel" Orientation="Horizontal">
-                    <Path x:Name="sectionPinIcon" Style="{StaticResource IconStyle}"
-                          Data="{StaticResource IconPin}" Visibility="Collapsed"
-                          Stroke="{DynamicResource PinBrush}" Fill="{DynamicResource PinBrush}"
-                          Width="13" Height="13" Margin="0,0,4,0" />
-                    <TextBlock x:Name="sectionTitle" Text="{Binding Title}"
-                               FontSize="{StaticResource FontSizeCaption}"
-                               Foreground="{DynamicResource ForegroundDimBrush}" />
-                </StackPanel>
-
-                <!-- 分组标题 -->
-                <Grid x:Name="groupPanel" Visibility="Collapsed"
-                      Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType=Window}}">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="20" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-
-                    <Border Grid.Column="0" Background="Transparent"
-                            MouseLeftButtonDown="GroupArrow_Click">
-                        <Grid Width="16" Height="16">
-                            <Path Style="{StaticResource IconStyle}" Data="{StaticResource IconChevronRight}">
-                                <Path.Visibility>
-                                    <Binding Path="Group.IsExpanded" Converter="{x:Static infra:InverseBoolToVisibilityConverter.Instance}" />
-                                </Path.Visibility>
-                            </Path>
-                            <Path Style="{StaticResource IconStyle}" Data="{StaticResource IconChevronDown}"
-                                  Visibility="{Binding Group.IsExpanded, Converter={StaticResource Bool2Vis}}" />
-                        </Grid>
-                    </Border>
-
-                    <TextBlock Grid.Column="1" VerticalAlignment="Center" FontWeight="SemiBold"
-                               FontSize="{StaticResource FontSizeBody}" Text="{Binding Group.Name}" />
-
-                    <TextBlock Grid.Column="2" VerticalAlignment="Center" Margin="6,0,0,0"
-                               FontSize="{StaticResource FontSizeCaption}"
-                               Foreground="{DynamicResource ForegroundDimBrush}">
-                        <Run Text="(" /><Run Text="{Binding Group.Items.Count, Mode=OneWay}" /><Run Text=")" />
-                    </TextBlock>
-
-                    <Ellipse Grid.Column="3" Width="6" Height="6" Margin="6,0,0,0"
-                             VerticalAlignment="Center"
-                             Fill="{DynamicResource AccentBrush}"
-                             Visibility="{Binding Group.IsActiveGroup, Converter={StaticResource Bool2Vis}}" />
-
-                    <Path Grid.Column="4" Style="{StaticResource IconStyle}"
-                          Data="{StaticResource IconPin}" Width="13" Height="13" Margin="6,0,0,0"
-                          VerticalAlignment="Center"
-                          Stroke="{DynamicResource PinBrush}" Fill="{DynamicResource PinBrush}"
-                          Visibility="{Binding Group.IsPinned, Converter={StaticResource Bool2Vis}}" />
-
-                    <Grid.ContextMenu>
-                        <ContextMenu>
-                            <MenuItem Header="置顶"
-                                      Command="{Binding PlacementTarget.Tag.PinGroupCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                                      CommandParameter="{Binding PlacementTarget.DataContext.Group, RelativeSource={RelativeSource AncestorType=ContextMenu}}">
-                                <MenuItem.Visibility>
-                                    <Binding Path="PlacementTarget.DataContext.Group.IsPinned"
-                                             RelativeSource="{RelativeSource AncestorType=ContextMenu}"
-                                             Converter="{x:Static infra:InverseBoolToVisibilityConverter.Instance}" />
-                                </MenuItem.Visibility>
-                            </MenuItem>
-                            <MenuItem Header="取消置顶"
-                                      Command="{Binding PlacementTarget.Tag.UnpinGroupCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                                      CommandParameter="{Binding PlacementTarget.DataContext.Group, RelativeSource={RelativeSource AncestorType=ContextMenu}}">
-                                <MenuItem.Visibility>
-                                    <Binding Path="PlacementTarget.DataContext.Group.IsPinned"
-                                             RelativeSource="{RelativeSource AncestorType=ContextMenu}"
-                                             Converter="{StaticResource Bool2Vis}" />
-                                </MenuItem.Visibility>
-                            </MenuItem>
-                            <MenuItem Header="重命名"
-                                      Command="{Binding PlacementTarget.Tag.RenameGroupCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                                      CommandParameter="{Binding PlacementTarget.DataContext.Group, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-                            <MenuItem Header="清空组内项"
-                                      Command="{Binding PlacementTarget.Tag.ClearGroupCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                                      CommandParameter="{Binding PlacementTarget.DataContext.Group, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-                            <Separator />
-                            <MenuItem Header="删除分组"
-                                      Command="{Binding PlacementTarget.Tag.DeleteGroupCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                                      CommandParameter="{Binding PlacementTarget.DataContext.Group, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-                        </ContextMenu>
-                    </Grid.ContextMenu>
-                </Grid>
-                </Grid>
-            </Border>
-            <DataTemplate.Triggers>
-                <DataTrigger Binding="{Binding IsGroup}" Value="True">
-                    <Setter TargetName="groupPanel" Property="Visibility" Value="Visible" />
-                    <Setter TargetName="sectionPanel" Property="Visibility" Value="Collapsed" />
-                </DataTrigger>
-                <DataTrigger Binding="{Binding Kind}" Value="{x:Static vm:ClipboardSectionKind.Pinned}">
-                    <Setter TargetName="sectionPinIcon" Property="Visibility" Value="Visible" />
-                    <Setter TargetName="sectionTitle" Property="Foreground" Value="{DynamicResource PinBrush}" />
-                </DataTrigger>
-            </DataTemplate.Triggers>
+            <StackPanel Orientation="Horizontal" Margin="12,8,0,2">
+                <Path Style="{StaticResource IconStyle}" Data="{StaticResource IconPin}"
+                      Width="13" Height="13" Margin="0,0,4,0"
+                      Stroke="{DynamicResource PinBrush}" Fill="{DynamicResource PinBrush}" />
+                <TextBlock Text="{Binding Title}"
+                           FontSize="{StaticResource FontSizeCaption}"
+                           Foreground="{DynamicResource PinBrush}" />
+            </StackPanel>
         </DataTemplate>
 
         <infra:ClipboardEntryTemplateSelector x:Key="EntrySelector"
@@ -408,6 +349,7 @@
 
     <Grid>
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
@@ -446,11 +388,6 @@
                         </Path>
                     </Grid>
                 </ToggleButton>
-                <Button Style="{StaticResource GhostButton}" ToolTip="新建分组"
-                        Margin="0,0,4,0"
-                        Command="{Binding CreateGroupCommand}">
-                    <Path Style="{StaticResource IconStyle}" Data="{StaticResource IconPlus}"/>
-                </Button>
                 <Button Style="{StaticResource GhostButton}" ToolTip="设置"
                         Margin="0,0,4,0"
                         Click="Settings_Click">
@@ -510,8 +447,31 @@
             </Grid>
         </Border>
 
+        <!-- 标签栏：全部 / 置顶 / 未分组 / 各分组 / 类型筛选 + 新建分组；
+             溢出时横向滚动（滚动条隐藏，滚轮横滚，见 TabScroll_PreviewMouseWheel） -->
+        <ScrollViewer Grid.Row="2" x:Name="TabScroll"
+                      Margin="12,2,12,4"
+                      HorizontalScrollBarVisibility="Hidden"
+                      VerticalScrollBarVisibility="Disabled"
+                      PreviewMouseWheel="TabScroll_PreviewMouseWheel">
+            <StackPanel Orientation="Horizontal">
+                <ItemsControl ItemsSource="{Binding Tabs}" ItemTemplate="{StaticResource TabItemTemplate}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Orientation="Horizontal" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                </ItemsControl>
+                <Button Style="{StaticResource GhostButton}" ToolTip="新建分组"
+                        VerticalAlignment="Center" Padding="5"
+                        Command="{Binding CreateGroupCommand}">
+                    <Path Style="{StaticResource IconStyle}" Data="{StaticResource IconPlus}"/>
+                </Button>
+            </StackPanel>
+        </ScrollViewer>
+
         <!-- 列表区 -->
-        <Grid Grid.Row="2">
+        <Grid Grid.Row="3">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
@@ -577,7 +537,7 @@
                             <Run Text="未找到匹配「" /><Run Text="{Binding SearchText}" /><Run Text="」的条目" />
                         </TextBlock>
                     </StackPanel>
-                    <!-- 队列空（无搜索） -->
+                    <!-- 队列空（无搜索）：文案随当前标签类型变化 -->
                     <StackPanel Visibility="{Binding IsSearching, Converter={x:Static infra:InverseBoolToVisibilityConverter.Instance}}">
                         <Path Style="{StaticResource IconStyle}" Data="{StaticResource IconInbox}"
                               Width="32" Height="32" HorizontalAlignment="Center"
@@ -585,17 +545,17 @@
                         <TextBlock Margin="0,10,0,0" HorizontalAlignment="Center"
                                    FontSize="{StaticResource FontSizeBody}"
                                    Foreground="{DynamicResource ForegroundDimBrush}"
-                                   Text="暂无复制内容" />
-                        <TextBlock Margin="0,4,0,0" HorizontalAlignment="Center"
+                                   Text="{Binding EmptyStateText}" />
+                        <TextBlock Margin="0,4,0,0" HorizontalAlignment="Center" TextAlignment="Center"
                                    FontSize="{StaticResource FontSizeCaption}"
                                    Foreground="{DynamicResource ForegroundDimBrush}"
-                                   Text="在任意应用按 Ctrl+C 即可收集到这里" />
+                                   Text="{Binding EmptyStateHint}" />
                     </StackPanel>
                 </StackPanel>
             </Grid>
         </Grid>
         <!-- 底部操作提示：动态文案 + 可见的撤销按钮；点击空白处打开快捷键说明 -->
-        <Border Grid.Row="3" Background="{DynamicResource CardBackgroundBrush}" Padding="12,6"
+        <Border Grid.Row="4" Background="{DynamicResource CardBackgroundBrush}" Padding="12,6"
                 Cursor="Hand" ToolTip="点击查看全部快捷键"
                 MouseLeftButtonDown="Help_Click">
             <DockPanel>

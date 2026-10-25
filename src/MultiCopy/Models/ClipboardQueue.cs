@@ -380,6 +380,9 @@ public sealed class ClipboardQueue
     {
         if (!Groups.Contains(g)) return;
         g.Name = newName ?? g.Name;
+        // 必须触发 Changed：否则顶部标签栏标题不刷新，且 App 的指纹持久化
+        // （BuildGroupsFingerprint 含 Group.Name）不会感知变化，改名延迟落盘
+        OnChanged();
     }
 
     /// <summary>删除分组。moveItemsToUngrouped=true 时组内项移至未分组，否则连同删除。</summary>

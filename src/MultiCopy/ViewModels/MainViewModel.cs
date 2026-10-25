@@ -31,6 +31,21 @@ public sealed partial class MainViewModel : ObservableObject
     /// <summary>扁平显示行：区域标题行 + 内容行，直接绑定到 ListBox。</summary>
     public ObservableCollection<ClipboardListEntry> Rows { get; } = new();
 
+    /// <summary>顶部标签栏（全部/置顶/未分组/各分组/类型筛选）。由 RebuildTabs 随队列变化重建。</summary>
+    public ObservableCollection<ClipboardTab> Tabs { get; } = new();
+
+    /// <summary>当前选中的标签。仅由 SelectTab（用户点击）与 RebuildTabs（重建恢复）设置。</summary>
+    [ObservableProperty]
+    private ClipboardTab? _selectedTab;
+
+    /// <summary>空状态主文案（随当前标签类型变化）。</summary>
+    [ObservableProperty]
+    private string _emptyStateText = "暂无复制内容";
+
+    /// <summary>空状态副文案（操作指引，随标签类型变化）。</summary>
+    [ObservableProperty]
+    private string _emptyStateHint = "在任意应用按 Ctrl+C 即可收集到这里";
+
     [ObservableProperty]
     private bool _modeOn;
 
@@ -155,7 +170,8 @@ public sealed partial class MainViewModel : ObservableObject
     public ClipboardItem? SelectedItem => (SelectedEntry as ClipboardItemRow)?.Item;
 
     /// <summary>
-    /// 重建单一行列表：区域标题行 + 内容行。队列变化、搜索、分组折叠都走这里。
+    /// 重建单一行列表：按当前标签的范围过滤内容行，仅「全部」保留置顶小节标题行。
+    /// 队列变化、搜索、标签切换都走这里。
     /// advanceIfMissing=true 时，若原选中项已被移除，按原位置自动续选下一项。
     /// </summary>
     public void RebuildRows(bool advanceIfMissing)
@@ -169,43 +185,44 @@ public sealed partial class MainViewModel : ObservableObject
         Rows.Clear();
         string? keyword = IsSearching ? SearchText!.Trim() : null;
 
-        // 1. 置顶区：有可见项才显示标题
-        var pinned = FilterItems(PinnedItems, keyword);
-        if (pinned.Count > 0)
-        {
-            Rows.Add(new ClipboardHeaderRow(ClipboardSectionKind.Pinned, null,
-                "置顶（双击粘贴 · 不会被 Ctrl+V 消耗）"));
-            foreach (var item in pinned)
-                Rows.Add(new ClipboardItemRow(item, ClipboardSectionKind.Pinned, null));
-        }
+        var kind = SelectedTab?.Kind ?? ClipboardTabKind.All;
+        // 分组标签指向已删除的分组（理论上是 RebuildTabs 之前的瞬间状态）：退回全部
+        var tabGroup = SelectedTab?.Group;
+        if (kind == ClipboardTabKind.Group && (tabGroup == null || _queue.FindGroup(tabGroup.Id) == null))
+            kind = ClipboardTabKind.All;
 
-        // 2. 未分组区：无分组时作为扁平队列始终显示；有分组时仅在非空时显示
-        var ungrouped = FilterItems(UngroupedItems, keyword);
-        if (Groups.Count == 0)
+        switch (kind)
         {
-            Rows.Add(new ClipboardHeaderRow(ClipboardSectionKind.Ungrouped, null,
-                "队列（开模式后按 Ctrl+V 按序粘贴 · 单击直接粘贴）"));
-            foreach (var item in ungrouped)
-                Rows.Add(new ClipboardItemRow(item, ClipboardSectionKind.Ungrouped, null));
-        }
-        else if (ungrouped.Count > 0)
-        {
-            Rows.Add(new ClipboardHeaderRow(ClipboardSectionKind.Ungrouped, null,
-                "未分组（单击粘贴 · 开模式 Ctrl+V 按序出队）"));
-            foreach (var item in ungrouped)
-                Rows.Add(new ClipboardItemRow(item, ClipboardSectionKind.Ungrouped, null));
-        }
+            case ClipboardTabKind.All:
+            {
+                // 置顶区：有可见项才显示标题；其余内容按展示顺序平铺（不分区，避免页面过长）
+                var pinned = FilterItems(PinnedItems, keyword);
+                if (pinned.Count > 0)
+                {
+                    Rows.Add(new ClipboardHeaderRow(ClipboardSectionKind.Pinned, null,
+                        "置顶（双击粘贴 · 不会被 Ctrl+V 消耗）"));
+                    foreach (var item in pinned)
+                        Rows.Add(new ClipboardItemRow(item, ClipboardSectionKind.Pinned, null));
+                }
+                AddRows(EnumerateNormalWithGroup(), keyword);
+                break;
+            }
+            case ClipboardTabKind.Pinned:
+                AddRows(PinnedItems.Select(i => (i, (ClipboardGroup?)null)), keyword);
+                break;
 
-        // 3. 各分组：标题始终显示（空分组也可管理）；搜索时只显示有匹配项的分组
-        foreach (var g in Groups)
-        {
-            var groupItems = FilterItems(g.Items, keyword);
-            if (keyword != null && groupItems.Count == 0) continue;
+            case ClipboardTabKind.Ungrouped:
+                AddRows(UngroupedItems.Select(i => (i, (ClipboardGroup?)null)), keyword);
+                break;
 
-            Rows.Add(new ClipboardHeaderRow(ClipboardSectionKind.Group, g, g.Name));
-            if (!g.IsExpanded) continue;
-            foreach (var item in groupItems)
-                Rows.Add(new ClipboardItemRow(item, ClipboardSectionKind.Group, g));
+            case ClipboardTabKind.Group:
+                AddRows(tabGroup!.Items.Select(i => (i, (ClipboardGroup?)tabGroup)), keyword);
+                break;
+
+            default:
+                // 类型筛选（文本/图像/链接）：跨置顶 + 未分组 + 所有分组
+                AddRows(EnumerateAllWithGroup().Where(p => MatchesTabKind(kind, p.Item)), keyword);
+                break;
         }
 
         // 4. 选择恢复
@@ -226,8 +243,49 @@ public sealed partial class MainViewModel : ObservableObject
         SelectedEntry = itemRows[Math.Clamp(previousItemIndex, 0, itemRows.Count - 1)];
     }
 
+    /// <summary>按展示顺序枚举普通项及其所属分组（未分组 → 各分组）。</summary>
+    private IEnumerable<(ClipboardItem Item, ClipboardGroup? Group)> EnumerateNormalWithGroup()
+    {
+        foreach (var item in UngroupedItems) yield return (item, null);
+        foreach (var g in Groups)
+            foreach (var item in g.Items)
+                yield return (item, g);
+    }
+
+    /// <summary>按展示顺序枚举全部项（含置顶）及其所属分组。</summary>
+    private IEnumerable<(ClipboardItem Item, ClipboardGroup? Group)> EnumerateAllWithGroup()
+    {
+        foreach (var item in PinnedItems) yield return (item, null);
+        foreach (var pair in EnumerateNormalWithGroup()) yield return pair;
+    }
+
+    /// <summary>类型筛选标签的匹配规则（文本与链接互斥：URL 文本只归「链接」）。</summary>
+    private static bool MatchesTabKind(ClipboardTabKind kind, ClipboardItem item) => kind switch
+    {
+        ClipboardTabKind.TypeText => item is TextClipboardItem t && !t.IsLink,
+        ClipboardTabKind.TypeImage => item is ImageClipboardItem,
+        ClipboardTabKind.TypeLink => item is TextClipboardItem { IsLink: true },
+        _ => true
+    };
+
+    /// <summary>把 (条目, 分组) 序列按关键字过滤后加入行列表；行 Kind 按归属推导，保证置顶/分组视觉正确。</summary>
+    private void AddRows(IEnumerable<(ClipboardItem Item, ClipboardGroup? Group)> source, string? keyword)
+    {
+        foreach (var (item, group) in source)
+        {
+            if (keyword != null && !ItemMatches(item, keyword)) continue;
+            Rows.Add(new ClipboardItemRow(item,
+                group != null ? ClipboardSectionKind.Group
+                    : item.IsPinned ? ClipboardSectionKind.Pinned
+                    : ClipboardSectionKind.Ungrouped,
+                group));
+        }
+    }
+
     private void RefreshAll(bool advanceIfMissing)
     {
+        // 先重建标签栏（选中项按 TabId 恢复），再按选中标签的范围重建行
+        RebuildTabs();
         RebuildRows(advanceIfMissing);
 
         int normalCount = _queue.NormalCount;
@@ -236,9 +294,13 @@ public sealed partial class MainViewModel : ObservableObject
         CanUndo = _queue.CanUndo;
 
         AllEmpty = !Rows.OfType<ClipboardItemRow>().Any();
-        ShowEmptyState = AllEmpty && !Rows.OfType<ClipboardHeaderRow>().Any(h => h.IsGroup);
+        ShowEmptyState = AllEmpty && !Rows.OfType<ClipboardHeaderRow>().Any();
         SearchNoResult = IsSearching && AllEmpty;
         OnPropertyChanged(nameof(IsSearching));
+
+        var (emptyText, emptyHint) = BuildEmptyStateCopy();
+        EmptyStateText = emptyText;
+        EmptyStateHint = emptyHint;
 
         OperationHint = _queue.IsEmpty
             ? EmptyOperationHint
@@ -247,6 +309,45 @@ public sealed partial class MainViewModel : ObservableObject
         RefreshDisplayIndexes();
         UpdateRelativeTimes();
     }
+
+    /// <summary>
+    /// 重建标签栏：全部 → 置顶 → 未分组（仅有分组时）→ 各分组（Groups 顺序，置顶分组在前）
+    /// → 文本/图像/链接智能筛选。按 TabId 恢复选中；被删分组的选中回退到「全部」。
+    /// </summary>
+    private void RebuildTabs()
+    {
+        var previousId = SelectedTab?.TabId;
+        Tabs.Clear();
+
+        Tabs.Add(new ClipboardTab(ClipboardTabKind.All, "全部"));
+        Tabs.Add(new ClipboardTab(ClipboardTabKind.Pinned, "置顶"));
+        if (Groups.Count > 0)
+            Tabs.Add(new ClipboardTab(ClipboardTabKind.Ungrouped, "未分组"));
+        foreach (var g in Groups)
+            Tabs.Add(new ClipboardTab(g));
+        Tabs.Add(new ClipboardTab(ClipboardTabKind.TypeText, "文本"));
+        Tabs.Add(new ClipboardTab(ClipboardTabKind.TypeImage, "图像"));
+        Tabs.Add(new ClipboardTab(ClipboardTabKind.TypeLink, "链接"));
+
+        var selected = previousId == null
+            ? Tabs[0]
+            : Tabs.FirstOrDefault(t => t.TabId == previousId) ?? Tabs[0];
+        foreach (var t in Tabs)
+            t.IsSelected = ReferenceEquals(t, selected);
+        SelectedTab = selected;
+    }
+
+    /// <summary>按当前标签生成空状态文案（搜索无结果时由 SearchNoResult 分支接管，不走此文案）。</summary>
+    private (string Text, string Hint) BuildEmptyStateCopy() => (SelectedTab?.Kind ?? ClipboardTabKind.All) switch
+    {
+        ClipboardTabKind.Pinned => ("暂无置顶内容", "右键普通条目选择「置顶」，常驻内容会跨会话保留"),
+        ClipboardTabKind.Ungrouped => ("未分组暂无内容", "在任意应用按 Ctrl+C 即可收集到这里"),
+        ClipboardTabKind.Group => ("该分组暂无内容", "选中此分组标签后，新复制的内容会归入该组"),
+        ClipboardTabKind.TypeText => ("暂无文本内容", "复制文本后会出现在这里"),
+        ClipboardTabKind.TypeImage => ("暂无图像内容", "复制或截图后会出现在这里；选中后按空格可预览大图"),
+        ClipboardTabKind.TypeLink => ("暂无链接内容", "复制 http(s) 链接后会出现在这里"),
+        _ => ("暂无复制内容", "在任意应用按 Ctrl+C 即可收集到这里"),
+    };
 
     private static List<ClipboardItem> FilterItems(IEnumerable<ClipboardItem> source, string? keyword)
         => keyword == null
@@ -441,6 +542,9 @@ public sealed partial class MainViewModel : ObservableObject
         var g = _queue.AddGroup(name);
         // 新建分组自动设为活动分组（符合"新建后复制内容归入此组"场景）
         SetActiveGroup(g);
+        // 并选中新分组的标签（RebuildTabs 已重建标签集合，按 Id 找到对应标签）
+        var tab = Tabs.FirstOrDefault(t => t.Kind == ClipboardTabKind.Group && t.Group?.Id == g.Id);
+        if (tab != null) SelectTab(tab);
     }
 
     [RelayCommand]
@@ -477,27 +581,44 @@ public sealed partial class MainViewModel : ObservableObject
         _queue.ClearGroup(g);
     }
 
+    /// <summary>
+    /// 切换顶部标签（标签栏点击）。语义映射：
+    /// - 分组标签 = 设为活动分组（置顶分组除外：仅查看，不改变采集目标）；
+    /// - 全部 / 未分组 = 清空活动分组（回到全局采集 + 全局 FIFO）；
+    /// - 置顶 / 文本 / 图像 / 链接 = 纯查看筛选，不改变采集目标。
+    /// 退出分组模式的通道 = 点「全部」或「未分组」标签，无需再提供"再点一次取消"。
+    /// </summary>
     [RelayCommand]
-    private void ToggleGroupExpand(ClipboardGroup? g)
+    private void SelectTab(ClipboardTab? tab)
     {
-        if (g != null) g.IsExpanded = !g.IsExpanded;
-        // 折叠/展开会改变可见行集合与选择，整体重建
+        if (tab == null || ReferenceEquals(tab, SelectedTab)) return;
+
+        SelectedTab = tab;
+        foreach (var t in Tabs)
+            t.IsSelected = ReferenceEquals(t, tab);
+
+        switch (tab.Kind)
+        {
+            case ClipboardTabKind.All:
+            case ClipboardTabKind.Ungrouped:
+                _state.ActiveGroupId = null;
+                break;
+            case ClipboardTabKind.Group when tab.Group is { IsPinned: false } g:
+                _state.ActiveGroupId = g.Id;
+                break;
+        }
+        RefreshActiveGroupFlags();
         RefreshAll(advanceIfMissing: false);
     }
 
-    [RelayCommand]
-    private void SetActiveGroup(ClipboardGroup? g)
+    /// <summary>把分组设为活动分组（新复制内容归入此组）。置顶分组不可设为活动分组。</summary>
+    private void SetActiveGroup(ClipboardGroup g)
     {
         // 置顶分组不允许成为活动分组：组内项享有置顶语义、不参与自动出队，
         // 一旦设为活动，新复制内容会持续落入该组，而 NormalCount 排除置顶分组，
-        // 既绕过 MaxQueueItems 上限无限增长，又让新内容 Ctrl+V 粘不出来（“消失”）。
-        if (g is { IsPinned: true }) return;
-
-        // 再次点击当前活动分组 = 取消选中，回到“未分组 / 全局 FIFO”模式。
-        // 此前该命令恒把 ActiveGroupId 设为点击分组，用户一旦选中分组就没有退出通道
-        // （新复制内容持续入组、Ctrl+V 只消耗该组），只剩删除/置顶分组两条路，属可用性死角。
-        var targetId = g?.Id;
-        _state.ActiveGroupId = (targetId != null && _state.ActiveGroupId == targetId) ? null : targetId;
+        // 既绕过 MaxQueueItems 上限无限增长，又让新内容 Ctrl+V 粘不出来（"消失"）。
+        if (g.IsPinned) return;
+        _state.ActiveGroupId = g.Id;
         RefreshActiveGroupFlags();
     }
 
