@@ -64,6 +64,10 @@ MultiCopy 解决一个常见痛点：整理资料、填写表单、收集素材�
 | :-: | :-: |
 | ![暗色主题](docs/screenshots/main-window-dark.png) | ![亮色主题](docs/screenshots/main-window-light.png) |
 
+| 图像悬停预览 |
+| :-: |
+| ![图像悬停预览](docs/screenshots/preview-hover.png) |
+
 | 新建分组 | 监控剪贴板 |
 | :-: | :-: |
 | ![新建分组](docs/screenshots/Group.png) | ![监控剪贴板](docs/screenshots/monitor.png) |
