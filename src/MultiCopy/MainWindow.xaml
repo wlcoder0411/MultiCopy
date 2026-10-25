@@ -216,13 +216,16 @@
             </DataTemplate.Triggers>
         </DataTemplate>
 
-        <!-- ============ 内容行：图片 ============ -->
+        <!-- ============ 内容行：图片 ============
+             MouseEnter/Leave：悬停 0.5s 弹出大图预览（移开即关，见 ImageRow_MouseEnter） -->
         <DataTemplate x:Key="ImageItemTemplate" DataType="{x:Type vm:ClipboardItemRow}">
             <Border x:Name="selectionRing" Margin="6,1" BorderThickness="2" CornerRadius="8"
                     BorderBrush="Transparent" Background="Transparent"
                     PreviewMouseLeftButtonDown="ItemDragStart"
                     PreviewMouseMove="ItemDragMove"
                     MouseLeftButtonUp="Item_Click"
+                    MouseEnter="ImageRow_MouseEnter"
+                    MouseLeave="ImageRow_MouseLeave"
                     Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType=Window}}">
                 <Border.ContextMenu>
                     <ContextMenu Opened="ItemContextMenu_Opened">

@@ -7,6 +7,7 @@ using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using System.Windows.Threading;
 using MultiCopy.Infrastructure;
 using MultiCopy.Models;
 using MultiCopy.Native;
@@ -511,6 +512,7 @@ public partial class MainWindow : Window
         }
 
         _normalClickCooldownUntil = Environment.TickCount64 + 300;
+        CloseImagePreview(); // 鼠标粘贴即完成"看完再粘"，预览随条目出队关闭（键盘路径保留跟随下一项）
         _vm.PasteNormalItem(item);
     }
 
@@ -518,6 +520,7 @@ public partial class MainWindow : Window
     private void ItemDragStart(object sender, MouseButtonEventArgs e)
     {
         _suppressNextClick = false;
+        _hoverPreviewTimer?.Stop(); // 按下即取消待触发的悬停预览
 
         if (e.OriginalSource is DependencyObject d && FindAncestor<Button>(d) != null)
         {
@@ -538,6 +541,7 @@ public partial class MainWindow : Window
                     (Application.Current as App)?.Tray?.ShowPasteBlockedTip();
                     return;
                 }
+                CloseImagePreview();
                 _vm.PastePinnedItem(row.Item);
                 return;
             }
@@ -735,8 +739,8 @@ public partial class MainWindow : Window
         _vm.MoveGroup(sourceTab.Group!, targetTab.Group!, before);
     }
 
-    // ---------- 图像空格预览 ----------
-    /// <summary>开/关选中图像项的大图预览。预览窗不抢焦点，目标应用的键盘焦点不受影响。</summary>
+    // ---------- 图像预览：空格 / 悬停 / 行内按钮 三条路径共用一个预览窗 ----------
+    /// <summary>开/关选中图像项的大图预览（空格键路径）。预览窗不抢焦点，目标应用的键盘焦点不受影响。</summary>
     private void ToggleImagePreview(ImageClipboardItem item)
     {
         if (_imagePreview != null)
@@ -744,18 +748,91 @@ public partial class MainWindow : Window
             CloseImagePreview();
             return;
         }
-        _imagePreview = new ImagePreviewWindow();
-        _imagePreview.SetItem(item);
-        _imagePreview.PlaceNear(this);
-        _imagePreview.Closed += (_, _) => _imagePreview = null;
-        _imagePreview.Show();
+        OpenPreview(item, openedByHover: false);
     }
 
-    /// <summary>关闭图像预览窗（Esc/空格、选择切走、主窗口隐藏或关闭时调用）。</summary>
+    /// <summary>
+    /// 打开或更新预览窗。openedByHover=true 时预览跟随鼠标（移开图片行即关）；
+    /// false 时空格/Esc 或再次点击按钮关闭，选择变化时跟随切换。
+    /// </summary>
+    private void OpenPreview(ImageClipboardItem item, bool openedByHover)
+    {
+        _previewOpenedByHover = openedByHover;
+        if (_imagePreview == null)
+        {
+            _imagePreview = new ImagePreviewWindow();
+            _imagePreview.SetItem(item);
+            _imagePreview.PlaceNear(this);
+            _imagePreview.Closed += (_, _) => _imagePreview = null;
+            _imagePreview.Show();
+        }
+        else
+        {
+            _imagePreview.SetItem(item);
+        }
+    }
+
+    /// <summary>关闭图像预览窗并复位悬停状态（Esc/空格、鼠标移开、粘贴、主窗口隐藏或关闭时调用）。</summary>
     private void CloseImagePreview()
     {
+        _hoverPreviewTimer?.Stop();
+        _hoverRow = null;
+        _hoverItem = null;
+        _previewOpenedByHover = false;
         _imagePreview?.Close();
         _imagePreview = null;
+    }
+
+    // ---------- 图像行：悬停预览（鼠标主路径，无需选中/焦点/键盘） ----------
+    // 防误触靠停留时长门槛：移入图片行启动计时，移开/按下鼠标/开始拖拽即取消。
+    // 悬停打开的预览在鼠标离开图片行时关闭；空格或按钮打开的预览不受鼠标影响。
+    private DispatcherTimer? _hoverPreviewTimer;
+    private FrameworkElement? _hoverRow;
+    private ClipboardItem? _hoverItem;
+    private bool _previewOpenedByHover;
+    private const int HoverPreviewDelayMs = 500;
+
+    private void ImageRow_MouseEnter(object sender, MouseEventArgs e)
+    {
+        if (_vm == null) return;
+        // 按键进行中（点选粘贴/拖拽导出）不触发，等稳定悬停再说
+        if (e.LeftButton == MouseButtonState.Pressed || e.RightButton == MouseButtonState.Pressed) return;
+        if (sender is not FrameworkElement fe
+            || fe.DataContext is not ClipboardItemRow { Item: ImageClipboardItem img }) return;
+
+        _hoverRow = fe;
+        _hoverItem = img;
+        if (_imagePreview != null)
+        {
+            // 预览已开（空格/按钮/另一行悬停）：立即切换内容并接管为悬停语义
+            OpenPreview(img, openedByHover: true);
+            return;
+        }
+        _hoverPreviewTimer ??= CreateHoverPreviewTimer();
+        _hoverPreviewTimer.Stop();
+        _hoverPreviewTimer.Start();
+    }
+
+    private void ImageRow_MouseLeave(object sender, MouseEventArgs e)
+    {
+        _hoverPreviewTimer?.Stop();
+        _hoverRow = null;
+        _hoverItem = null;
+        if (_previewOpenedByHover) CloseImagePreview();
+    }
+
+    private DispatcherTimer CreateHoverPreviewTimer()
+    {
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(HoverPreviewDelayMs) };
+        timer.Tick += (_, _) =>
+        {
+            timer.Stop();
+            // 兜底校验：停留期间鼠标可能已移走（MouseLeave 未触发的边缘情况），或按键已按下
+            if (_hoverRow?.IsMouseOver != true || _hoverItem is not ImageClipboardItem img) return;
+            if (Mouse.LeftButton == MouseButtonState.Pressed || Mouse.RightButton == MouseButtonState.Pressed) return;
+            OpenPreview(img, openedByHover: true);
+        };
+        return timer;
     }
 
     // ---------- 普通项右键菜单：动态构建"移动到分组…"子菜单 ----------
