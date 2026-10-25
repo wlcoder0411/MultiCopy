@@ -142,10 +142,13 @@ public partial class MainWindow : Window
             return;
         }
 
-        // 空格：预览选中的图像项（PasteNow 式）。焦点在搜索框时是输入字符、
-        // 在按钮上时是激活按钮，均不拦截；非图像项保持系统默认行为。
+        // 空格：预览选中的图像项（PasteNow 式）。
+        // 焦点在搜索框时通常是输入字符，但 Alt+Z 调出窗口后焦点必然落在搜索框——
+        // 若一律放行，空格预览在最常用路径下永远无法触发。故搜索框为空时也拦截：
+        // 空搜索以空格开头无意义（搜索会 Trim），有内容时仍是正常输入。
+        // 焦点在按钮上时是激活按钮，不拦截；非图像项保持系统默认行为。
         if (e.Key == Key.Space
-            && !searchFocused
+            && (!searchFocused || !searchHasText)
             && Keyboard.FocusedElement is not ButtonBase
             && _vm.SelectedItem is ImageClipboardItem previewTarget)
         {
