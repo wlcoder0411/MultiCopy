@@ -9,7 +9,7 @@
     <UseWPF>true</UseWPF>
     <RootNamespace>MultiCopy</RootNamespace>
     <AssemblyName>MultiCopy</AssemblyName>
-    <Version>7.3</Version>
+    <Version>7.6</Version>
     <Company>MultiCopy</Company>
     <Product>MultiCopy</Product>
     <ApplicationManifest>app.manifest</ApplicationManifest>
