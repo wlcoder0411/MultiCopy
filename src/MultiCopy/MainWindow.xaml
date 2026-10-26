@@ -217,15 +217,14 @@
         </DataTemplate>
 
         <!-- ============ 内容行：图片 ============
-             MouseEnter/Leave：悬停 0.5s 弹出大图预览（移开即关，见 ImageRow_MouseEnter） -->
+             悬停预览由 ResultsList 统一做命中测试（不走行级 MouseEnter：
+             队列变化会重建行容器，鼠标静止时 WPF 不会为新容器补发 MouseEnter） -->
         <DataTemplate x:Key="ImageItemTemplate" DataType="{x:Type vm:ClipboardItemRow}">
             <Border x:Name="selectionRing" Margin="6,1" BorderThickness="2" CornerRadius="8"
                     BorderBrush="Transparent" Background="Transparent"
                     PreviewMouseLeftButtonDown="ItemDragStart"
                     PreviewMouseMove="ItemDragMove"
                     MouseLeftButtonUp="Item_Click"
-                    MouseEnter="ImageRow_MouseEnter"
-                    MouseLeave="ImageRow_MouseLeave"
                     Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType=Window}}">
                 <Border.ContextMenu>
                     <ContextMenu Opened="ItemContextMenu_Opened">
@@ -361,12 +360,38 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <!-- 顶部栏 -->
-        <DockPanel Grid.Row="0" Margin="12,8,12,6">
+        <!-- 顶部操作提示：灯泡图标标识使用说明入口 + 单行动态提示 + 撤销按钮。
+             整条可点击打开快捷键说明（点在按钮上不触发，见 Help_Click）。
+             单行 + 省略号：避免提示文案换行撑高顶部；完整内容见帮助对话框。 -->
+        <Border Grid.Row="0" Background="{DynamicResource CardBackgroundBrush}" Padding="10,5,6,5"
+                Cursor="Hand" ToolTip="点击查看全部快捷键与使用说明"
+                MouseLeftButtonDown="Help_Click">
+            <DockPanel>
+                <Button DockPanel.Dock="Right" Style="{StaticResource GhostButton}" Padding="4"
+                        Margin="6,0,0,0" VerticalAlignment="Center"
+                        ToolTip="撤销上一步（Ctrl+Z）"
+                        IsEnabled="{Binding CanUndo}"
+                        Command="{Binding UndoLastRemovalCommand}">
+                    <Path Style="{StaticResource IconStyle}" Data="{StaticResource IconUndo}"/>
+                </Button>
+                <Path DockPanel.Dock="Left" Style="{StaticResource IconStyle}"
+                      Data="{StaticResource IconBulb}" Width="14" Height="14"
+                      Stroke="{DynamicResource AccentBrush}"
+                      Margin="4,1,7,0" VerticalAlignment="Center" />
+                <TextBlock FontSize="{StaticResource FontSizeCaption}"
+                           Foreground="{DynamicResource ForegroundDimBrush}"
+                           TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"
+                           VerticalAlignment="Center"
+                           Text="{Binding OperationHint}" />
+            </DockPanel>
+        </Border>
+
+        <!-- 工具栏 -->
+        <DockPanel Grid.Row="1" Margin="12,6,12,4">
             <!-- 容量指示：达到上限时转为警示色 -->
             <TextBlock DockPanel.Dock="Left" VerticalAlignment="Center"
                        FontSize="{StaticResource FontSizeCaption}"
@@ -427,11 +452,11 @@
             </StackPanel>
         </DockPanel>
 
-        <Separator Grid.Row="0" VerticalAlignment="Bottom"
+        <Separator Grid.Row="1" VerticalAlignment="Bottom"
                    Background="{DynamicResource BorderBrush}" Margin="0,2" />
 
         <!-- 搜索框 -->
-        <Border Grid.Row="1" Margin="12,2,12,6" Style="{StaticResource SearchBorder}">
+        <Border Grid.Row="2" Margin="12,2,12,6" Style="{StaticResource SearchBorder}">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
@@ -458,7 +483,7 @@
 
         <!-- 标签栏：全部 / 置顶 / 各分组 / 类型筛选 + 新建分组；
              溢出时横向滚动（滚动条隐藏，滚轮横滚，见 TabScroll_PreviewMouseWheel） -->
-        <ScrollViewer Grid.Row="2" x:Name="TabScroll"
+        <ScrollViewer Grid.Row="3" x:Name="TabScroll"
                       Margin="12,2,12,4"
                       HorizontalScrollBarVisibility="Hidden"
                       VerticalScrollBarVisibility="Disabled"
@@ -480,7 +505,7 @@
         </ScrollViewer>
 
         <!-- 列表区 -->
-        <Grid Grid.Row="3">
+        <Grid Grid.Row="4">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
@@ -529,7 +554,11 @@
                          SelectedItem="{Binding SelectedEntry, Mode=TwoWay}"
                          ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                          VirtualizingPanel.IsVirtualizing="True"
-                         VirtualizingPanel.VirtualizationMode="Recycling" />
+                         VirtualizingPanel.VirtualizationMode="Recycling"
+                         MouseMove="ResultsList_MouseMove"
+                         MouseLeave="ResultsList_MouseLeave"
+                         PreviewMouseLeftButtonUp="ResultsList_PreviewMouseButtonUp"
+                         PreviewMouseRightButtonUp="ResultsList_PreviewMouseButtonUp" />
 
                 <!-- 空状态覆盖层 -->
                 <StackPanel Margin="0,40,0,0" HorizontalAlignment="Center" VerticalAlignment="Top"
@@ -563,23 +592,5 @@
                 </StackPanel>
             </Grid>
         </Grid>
-        <!-- 底部操作提示：动态文案 + 可见的撤销按钮；点击空白处打开快捷键说明 -->
-        <Border Grid.Row="4" Background="{DynamicResource CardBackgroundBrush}" Padding="12,6"
-                Cursor="Hand" ToolTip="点击查看全部快捷键"
-                MouseLeftButtonDown="Help_Click">
-            <DockPanel>
-                <Button DockPanel.Dock="Right" Style="{StaticResource GhostButton}" Padding="4"
-                        Margin="6,0,0,0" VerticalAlignment="Center"
-                        ToolTip="撤销上一步（Ctrl+Z）"
-                        IsEnabled="{Binding CanUndo}"
-                        Command="{Binding UndoLastRemovalCommand}">
-                    <Path Style="{StaticResource IconStyle}" Data="{StaticResource IconUndo}"/>
-                </Button>
-                <TextBlock FontSize="{StaticResource FontSizeCaption}"
-                           Foreground="{DynamicResource ForegroundDimBrush}" TextWrapping="Wrap"
-                           VerticalAlignment="Center"
-                           Text="{Binding OperationHint}" />
-            </DockPanel>
-        </Border>
     </Grid>
 </Window>

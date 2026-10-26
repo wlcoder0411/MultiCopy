@@ -95,15 +95,22 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private bool _showOnboarding;
 
-    /// <summary>底部动态操作提示。</summary>
+    /// <summary>顶部动态操作提示（单行显示，完整说明见帮助对话框）。</summary>
     [ObservableProperty]
-    private string _operationHint = DefaultOperationHint;
+    private string _operationHint = IdleOperationHint;
 
-    private const string DefaultOperationHint =
-        "模式开：Ctrl+V 按序出队 · 窗口内：↑↓ 选择、Enter 粘贴、Ctrl+Z 撤销 · 点击此处查看全部快捷键";
+    // 顶部提示为单行（超出省略），保留最常用 + 最不易发现的操作；完整快捷键见帮助对话框。
+    private const string IdleOperationHint =
+        "↑↓ 选择 · Enter 粘贴 · 空格预览图像 · Ctrl+Z 撤销";
+
+    private const string ModeOnOperationHint =
+        "Ctrl+V 按序出队 · ↑↓ 选择 · Enter 粘贴 · 空格预览图像";
+
+    private const string UndoOperationHint =
+        "可撤销上一步 · Ctrl+Z 撤销 · 空格预览图像";
 
     private const string EmptyOperationHint =
-        "在任意应用 Ctrl+C 收集内容 · Alt+Z 随时调出 · 点击此处查看全部快捷键";
+        "Ctrl+C 收集内容 · Alt+Z 调出 · 悬停图片可预览大图 · 点击查看说明";
 
     /// <summary>当前是否在搜索状态（SearchText 非空白）。</summary>
     public bool IsSearching => !string.IsNullOrWhiteSpace(SearchText);
@@ -151,8 +158,12 @@ public sealed partial class MainViewModel : ObservableObject
         SettingsStorageService.Update(s => s.Theme = ThemeService.CurrentTheme);
     }
 
-    // ObservableProperty 生成的 ModeOn setter 变化时同步回 AppState
-    partial void OnModeOnChanged(bool value) => _state.ModeOn = value;
+    // ObservableProperty 生成的 ModeOn setter 变化时同步回 AppState，并刷新提示文案
+    partial void OnModeOnChanged(bool value)
+    {
+        _state.ModeOn = value;
+        UpdateOperationHint();
+    }
 
     // ObservableProperty 生成的 IsMonitoring setter 变化时同步回 AppState
     partial void OnIsMonitoringChanged(bool value) => _state.IsMonitoring = value;
@@ -298,12 +309,23 @@ public sealed partial class MainViewModel : ObservableObject
         EmptyStateText = emptyText;
         EmptyStateHint = emptyHint;
 
-        OperationHint = _queue.IsEmpty
-            ? EmptyOperationHint
-            : (CanUndo ? "可撤销上一步 · Ctrl+Z 撤销 · 点击此处查看全部快捷键" : DefaultOperationHint);
+        UpdateOperationHint();
 
         RefreshDisplayIndexes();
         UpdateRelativeTimes();
+    }
+
+    /// <summary>
+    /// 生成顶部单行操作提示：按 队列空 / 可撤销 / 队列粘贴模式 选择最相关的一条。
+    /// 空格预览图像与悬停预览在所有常用路径的文案中均可见。
+    /// </summary>
+    private void UpdateOperationHint()
+    {
+        OperationHint = _queue.IsEmpty
+            ? EmptyOperationHint
+            : CanUndo
+                ? UndoOperationHint
+                : (ModeOn ? ModeOnOperationHint : IdleOperationHint);
     }
 
     /// <summary>

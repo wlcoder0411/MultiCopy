@@ -24,6 +24,18 @@ public partial class ImagePreviewWindow : Window
         ApplyNoActivate();
     }
 
+    /// <summary>是否处于"悬停预览"模式（由主窗口设置）。该模式下鼠标离开预览窗会通知主窗口延迟关闭。</summary>
+    public bool IsHoverPreview { get; set; }
+
+    /// <summary>悬停预览模式下鼠标离开预览窗（主窗口据此延迟关闭，允许在图片行与预览窗之间移动）。</summary>
+    public event EventHandler? HoverExited;
+
+    protected override void OnMouseLeave(MouseEventArgs e)
+    {
+        base.OnMouseLeave(e);
+        if (IsHoverPreview) HoverExited?.Invoke(this, EventArgs.Empty);
+    }
+
     /// <summary>设置预览内容并按图片尺寸适配窗口。</summary>
     public void SetItem(ImageClipboardItem item)
     {
@@ -32,22 +44,35 @@ public partial class ImagePreviewWindow : Window
         FitToImage(item);
     }
 
-    /// <summary>贴靠主窗口右侧放置；右侧放不下改左侧，再不行居中，并收敛到虚拟屏内。</summary>
+    /// <summary>
+    /// 贴靠主窗口放置：右侧 → 左侧 → 主窗口上方，尽量不覆盖主窗口。
+    /// 覆盖主窗口会让指针落进预览窗，造成"悬停打开又立刻关闭"的抖动（窄图/贴边时尤其明显）。
+    /// </summary>
     public void PlaceNear(Window owner)
     {
         double virtualLeft = SystemParameters.VirtualScreenLeft;
         double virtualTop = SystemParameters.VirtualScreenTop;
         double virtualRight = virtualLeft + SystemParameters.VirtualScreenWidth;
         double virtualBottom = virtualTop + SystemParameters.VirtualScreenHeight;
+        const double gap = 12;
 
-        double left = owner.Left + owner.Width + 12;
+        double left = owner.Left + owner.Width + gap;
         if (left + Width > virtualRight)
-            left = owner.Left - Width - 12;
-        if (left < virtualLeft)
-            left = owner.Left + (owner.Width - Width) / 2;
+            left = owner.Left - Width - gap;
 
         double top = Math.Clamp(owner.Top, virtualTop,
             Math.Max(virtualTop, virtualBottom - Height - 8));
+
+        if (left < virtualLeft)
+        {
+            // 左右都放不下（贴边/窄屏）：放到主窗口上方；上方也放不下才水平居中
+            left = Math.Clamp(owner.Left, virtualLeft,
+                Math.Max(virtualLeft, virtualRight - Width - 8));
+            double above = owner.Top - Height - gap;
+            top = above >= virtualTop
+                ? above
+                : Math.Clamp(owner.Top, virtualTop, Math.Max(virtualTop, virtualBottom - Height - 8));
+        }
 
         Left = left;
         Top = top;

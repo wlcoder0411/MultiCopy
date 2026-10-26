@@ -8,8 +8,7 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
-using MultiCopy.Infrastructure;
-using MultiCopy.Models;
+using MultiCopy.Infrastructure;using MultiCopy.Models;
 using MultiCopy.Native;
 using MultiCopy.Services;
 using MultiCopy.State;
@@ -206,8 +205,18 @@ public partial class MainWindow : Window
         _vm = vm;
         DataContext = vm;
         vm.PropertyChanged += OnViewModelPropertyChanged;
+        // 队列变化会重建所有行容器（Rows.Clear + 重填）；鼠标静止时不会收到新的 MouseMove，
+        // 这里在重建后主动按当前指针位置恢复悬停状态，否则复制几次后悬停预览会"失灵"。
+        vm.Rows.CollectionChanged += OnRowsCollectionChanged;
         try { Icon = IconFactory.CreateAppIcon(); }
         catch { /* 图标生成失败不影响运行 */ }
+    }
+
+    /// <summary>行集合重建后（容器被回收/重建）重新按指针位置识别悬停目标。</summary>
+    private void OnRowsCollectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+    {
+        // 容器重建发生在布局阶段之后，用 Input 优先级排到其后
+        Dispatcher.BeginInvoke(new Action(RefreshHoverFromPointer), DispatcherPriority.Input);
     }
 
     /// <summary>选择变化（自动续选/撤销恢复）时把对应行滚动到可见区域；预览打开时同步换图。</summary>
@@ -739,7 +748,7 @@ public partial class MainWindow : Window
         _vm.MoveGroup(sourceTab.Group!, targetTab.Group!, before);
     }
 
-    // ---------- 图像预览：空格 / 悬停 / 行内按钮 三条路径共用一个预览窗 ----------
+    // ---------- 图像预览：空格 / 悬停 两条路径共用一个预览窗 ----------
     /// <summary>开/关选中图像项的大图预览（空格键路径）。预览窗不抢焦点，目标应用的键盘焦点不受影响。</summary>
     private void ToggleImagePreview(ImageClipboardItem item)
     {
@@ -753,21 +762,24 @@ public partial class MainWindow : Window
 
     /// <summary>
     /// 打开或更新预览窗。openedByHover=true 时预览跟随鼠标（移开图片行即关）；
-    /// false 时空格/Esc 或再次点击按钮关闭，选择变化时跟随切换。
+    /// false 时空格/Esc 关闭，选择变化时跟随切换。
     /// </summary>
     private void OpenPreview(ImageClipboardItem item, bool openedByHover)
     {
         _previewOpenedByHover = openedByHover;
         if (_imagePreview == null)
         {
-            _imagePreview = new ImagePreviewWindow();
+            _imagePreview = new ImagePreviewWindow { IsHoverPreview = openedByHover };
             _imagePreview.SetItem(item);
             _imagePreview.PlaceNear(this);
+            // 悬停模式：鼠标移入预览窗可细看；离开预览窗且不在图片行上时延迟关闭
+            _imagePreview.HoverExited += (_, _) => ScheduleHoverPreviewClose();
             _imagePreview.Closed += (_, _) => _imagePreview = null;
             _imagePreview.Show();
         }
         else
         {
+            _imagePreview.IsHoverPreview = openedByHover;
             _imagePreview.SetItem(item);
         }
     }
@@ -776,49 +788,111 @@ public partial class MainWindow : Window
     private void CloseImagePreview()
     {
         _hoverPreviewTimer?.Stop();
-        _hoverRow = null;
+        _hoverCloseTimer?.Stop();
         _hoverItem = null;
         _previewOpenedByHover = false;
         _imagePreview?.Close();
         _imagePreview = null;
     }
 
-    // ---------- 图像行：悬停预览（鼠标主路径，无需选中/焦点/键盘） ----------
-    // 防误触靠停留时长门槛：移入图片行启动计时，移开/按下鼠标/开始拖拽即取消。
-    // 悬停打开的预览在鼠标离开图片行时关闭；空格或按钮打开的预览不受鼠标影响。
+    // ---------- 图像行悬停预览（鼠标主路径，无需选中/焦点/键盘） ----------
+    // 关键：不在行模板上挂 MouseEnter/Leave。队列每次变化都会 RebuildRows（Rows.Clear + 重填），
+    // ListBox 的行容器（虚拟化 Recycling）被回收重建；鼠标静止时 WPF 不会给新容器补发
+    // MouseEnter，且旧容器已脱离可视化树（IsMouseOver=false），计时器 Tick 的兜底校验
+    // 会直接丢弃——表现为"复制几次后悬停预览失灵，要移开再移回才行"。
+    // 改为在 ListBox 层按指针位置做命中测试：容器怎么重建都能重新识别到目标行。
     private DispatcherTimer? _hoverPreviewTimer;
-    private FrameworkElement? _hoverRow;
-    private ClipboardItem? _hoverItem;
+    private DispatcherTimer? _hoverCloseTimer;
+    private ImageClipboardItem? _hoverItem;
     private bool _previewOpenedByHover;
     private const int HoverPreviewDelayMs = 500;
+    private const int HoverCloseDelayMs = 220;
 
-    private void ImageRow_MouseEnter(object sender, MouseEventArgs e)
+    private void ResultsList_MouseMove(object sender, MouseEventArgs e)
+    {
+        // 按住鼠标（点选粘贴/拖拽导出）期间不预览；松开后由 MouseButtonUp 重新识别
+        if (e.LeftButton == MouseButtonState.Pressed || e.RightButton == MouseButtonState.Pressed)
+        {
+            ClearHoverTarget();
+            return;
+        }
+        RefreshHoverFromPointer();
+    }
+
+    private void ResultsList_MouseLeave(object sender, MouseEventArgs e) => ClearHoverTarget();
+
+    /// <summary>鼠标松开后重新识别悬停目标，覆盖"按下期间被抑制"的场景（点选/拖拽结束时）。</summary>
+    private void ResultsList_PreviewMouseButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ChangedButton is not (MouseButton.Left or MouseButton.Right)) return;
+        Dispatcher.BeginInvoke(new Action(RefreshHoverFromPointer), DispatcherPriority.Input);
+    }
+
+    /// <summary>
+    /// 按鼠标当前位置命中测试，更新悬停预览目标。鼠标不在图片行上时清空并延迟关闭悬停预览。
+    /// </summary>
+    private void RefreshHoverFromPointer()
     {
         if (_vm == null) return;
-        // 按键进行中（点选粘贴/拖拽导出）不触发，等稳定悬停再说
-        if (e.LeftButton == MouseButtonState.Pressed || e.RightButton == MouseButtonState.Pressed) return;
-        if (sender is not FrameworkElement fe
-            || fe.DataContext is not ClipboardItemRow { Item: ImageClipboardItem img }) return;
+        if (!ResultsList.IsMouseOver)
+        {
+            ClearHoverTarget();
+            return;
+        }
 
-        _hoverRow = fe;
+        var img = HitTestImageRow(Mouse.GetPosition(ResultsList));
+        if (img == null)
+        {
+            ClearHoverTarget();
+            return;
+        }
+
+        _hoverCloseTimer?.Stop();
+        if (ReferenceEquals(_hoverItem, img))
+        {
+            // 同一行：预览已打开则保持；未打开则确保计时器在跑（容器重建后恢复的关键）
+            if (_imagePreview != null) return;
+            if (_hoverPreviewTimer?.IsEnabled != true) StartHoverTimer();
+            return;
+        }
+
         _hoverItem = img;
         if (_imagePreview != null)
         {
-            // 预览已开（空格/按钮/另一行悬停）：立即切换内容并接管为悬停语义
-            OpenPreview(img, openedByHover: true);
+            OpenPreview(img, openedByHover: true); // 预览已开：立即切换内容
             return;
         }
+        StartHoverTimer();
+    }
+
+    /// <summary>命中测试：指针下的元素向上找到内容行，仅图片行返回有效项。</summary>
+    private ImageClipboardItem? HitTestImageRow(Point p)
+    {
+        if (p.X < 0 || p.Y < 0 || p.X > ResultsList.ActualWidth || p.Y > ResultsList.ActualHeight)
+            return null;
+
+        var hit = ResultsList.InputHitTest(p) as DependencyObject;
+        while (hit != null)
+        {
+            if (hit is FrameworkElement fe && fe.DataContext is ClipboardItemRow row)
+                return row.Item as ImageClipboardItem;
+            hit = VisualTreeHelper.GetParent(hit);
+        }
+        return null;
+    }
+
+    private void StartHoverTimer()
+    {
         _hoverPreviewTimer ??= CreateHoverPreviewTimer();
         _hoverPreviewTimer.Stop();
         _hoverPreviewTimer.Start();
     }
 
-    private void ImageRow_MouseLeave(object sender, MouseEventArgs e)
+    private void ClearHoverTarget()
     {
         _hoverPreviewTimer?.Stop();
-        _hoverRow = null;
         _hoverItem = null;
-        if (_previewOpenedByHover) CloseImagePreview();
+        if (_previewOpenedByHover) ScheduleHoverPreviewClose();
     }
 
     private DispatcherTimer CreateHoverPreviewTimer()
@@ -827,10 +901,39 @@ public partial class MainWindow : Window
         timer.Tick += (_, _) =>
         {
             timer.Stop();
-            // 兜底校验：停留期间鼠标可能已移走（MouseLeave 未触发的边缘情况），或按键已按下
-            if (_hoverRow?.IsMouseOver != true || _hoverItem is not ImageClipboardItem img) return;
+            if (_hoverItem is not ImageClipboardItem img) return;
             if (Mouse.LeftButton == MouseButtonState.Pressed || Mouse.RightButton == MouseButtonState.Pressed) return;
+            // 停留期间列表可能已重建 / 指针已移走：以当前命中结果为准，不依赖旧容器
+            if (!ResultsList.IsMouseOver
+                || !ReferenceEquals(HitTestImageRow(Mouse.GetPosition(ResultsList)), img)) return;
             OpenPreview(img, openedByHover: true);
+        };
+        return timer;
+    }
+
+    /// <summary>
+    /// 延迟关闭悬停预览：留给鼠标移入预览窗的时间，避免预览窗贴近主窗口时
+    /// "移出图片行→立即关闭→指针落回图片行→重开"的闪烁。
+    /// </summary>
+    private void ScheduleHoverPreviewClose()
+    {
+        if (_imagePreview == null || !_previewOpenedByHover) return;
+        _hoverCloseTimer ??= CreateHoverCloseTimer();
+        _hoverCloseTimer.Stop();
+        _hoverCloseTimer.Start();
+    }
+
+    private DispatcherTimer CreateHoverCloseTimer()
+    {
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(HoverCloseDelayMs) };
+        timer.Tick += (_, _) =>
+        {
+            timer.Stop();
+            if (_imagePreview == null || !_previewOpenedByHover) return;
+            if (_imagePreview.IsMouseOver) return; // 鼠标已移入预览窗：保持打开
+            if (ResultsList.IsMouseOver
+                && HitTestImageRow(Mouse.GetPosition(ResultsList)) != null) return; // 又回到图片行
+            CloseImagePreview();
         };
         return timer;
     }

@@ -50,26 +50,33 @@
                 <TextBlock Style="{StaticResource HelpText}">
                     <Run Style="{StaticResource KeyRun}" Text="↑ / ↓" /><Run Text="　在列表中上下选择" /><LineBreak />
                     <Run Style="{StaticResource KeyRun}" Text="Enter" /><Run Text="　粘贴选中项" /><LineBreak />
+                    <Run Style="{StaticResource KeyRun}" Text="Space" /><Run Text="　预览选中的图像（原始尺寸大图，再按一次关闭）" /><LineBreak />
                     <Run Style="{StaticResource KeyRun}" Text="Del" /><Run Text="　删除选中项" /><LineBreak />
                     <Run Style="{StaticResource KeyRun}" Text="Ctrl+Z" /><Run Text="　撤销上一次粘贴 / 删除" /><LineBreak />
-                    <Run Style="{StaticResource KeyRun}" Text="Esc" /><Run Text="　清空搜索；再按一次隐藏窗口" />
+                    <Run Style="{StaticResource KeyRun}" Text="Esc" /><Run Text="　关闭图像预览 → 清空搜索 → 隐藏窗口（依次生效）" />
                 </TextBlock>
 
                 <TextBlock Style="{StaticResource SectionHeader}" Text="鼠标操作" />
                 <TextBlock Style="{StaticResource HelpText}">
+                    <Run Style="{StaticResource KeyRun}" Text="悬停图像条目" /><Run Text="　约 0.5 秒弹出大图预览，移开即关" /><LineBreak />
                     <Run Style="{StaticResource KeyRun}" Text="单击普通项" /><Run Text="　粘贴并从队列移除" /><LineBreak />
                     <Run Style="{StaticResource KeyRun}" Text="双击置顶项" /><Run Text="　粘贴但保留" /><LineBreak />
+                    <Run Style="{StaticResource KeyRun}" Text="点击分组标签" /><Run Text="　设为活动分组；点「全部」回到全局模式" /><LineBreak />
+                    <Run Style="{StaticResource KeyRun}" Text="拖动分组标签" /><Run Text="　调整普通分组的顺序（置顶分组固定在前）" /><LineBreak />
+                    <Run Style="{StaticResource KeyRun}" Text="右键分组标签" /><Run Text="　置顶、重命名、清空组内项、删除分组" /><LineBreak />
                     <Run Style="{StaticResource KeyRun}" Text="右键条目" /><Run Text="　置顶、移动到分组、按行拆分（文本）、删除" /><LineBreak />
                     <Run Style="{StaticResource KeyRun}" Text="拖拽条目" /><Run Text="　导出到目标窗口输入框或文件夹" />
                 </TextBlock>
 
                 <TextBlock Style="{StaticResource SectionHeader}" Text="使用提示" />
                 <TextBlock Style="{StaticResource HelpText}">
-                    <Run Text="• 序号固定按「置顶 → 未分组 → 各分组」排序，搜索或折叠不会改变编号。" /><LineBreak />
+                    <Run Text="• 列表序号按「置顶 → 未分组内容 → 各分组」排序，切换标签或搜索不会改变编号。" /><LineBreak />
+                    <Run Text="• 顶部标签栏可切换「全部 / 置顶 / 分组 / 文本 / 图像 / 链接」视图，末端「＋」新建分组。" /><LineBreak />
+                    <Run Text="• 空格预览与悬停预览都支持：悬停无需键盘焦点；空格需窗口有键盘焦点。" /><LineBreak />
                     <Run Text="• 窗口隐藏到托盘时监控暂停，Ctrl+V 也随之暂停。" /><LineBreak />
                     <Run Text="• Ctrl+Z 与方向键仅在窗口内生效；粘贴后可按 Alt+Z 回到窗口撤销。" /><LineBreak />
                     <Run Text="• 同一分组内相同文本会自动去重，不会重复入队。" /><LineBreak />
-                    <Run Text="• 队列上限 30 条，顶部显示当前容量，满后请在顶部清空或删除条目。" />
+                    <Run Text="• 队列上限 30 条，顶部显示当前容量，满后请从 ⋯ 菜单清空或删除条目。" />
                 </TextBlock>
             </StackPanel>
         </ScrollViewer>
