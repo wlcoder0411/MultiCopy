@@ -360,53 +360,71 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <!-- 顶部操作提示：灯泡图标标识使用说明入口 + 单行动态提示 + 撤销按钮。
-             整条可点击打开快捷键说明（点在按钮上不触发，见 Help_Click）。
-             单行 + 省略号：避免提示文案换行撑高顶部；完整内容见帮助对话框。 -->
-        <Border Grid.Row="0" Background="{DynamicResource CardBackgroundBrush}" Padding="10,5,6,5"
-                Cursor="Hand" ToolTip="点击查看全部快捷键与使用说明"
-                MouseLeftButtonDown="Help_Click">
-            <DockPanel>
-                <Button DockPanel.Dock="Right" Style="{StaticResource GhostButton}" Padding="4"
-                        Margin="6,0,0,0" VerticalAlignment="Center"
+        <!-- 工具栏 -->
+        <DockPanel Grid.Row="0" Margin="12,8,12,6">
+            <!-- 左侧：容量指示 + 操作提示灯泡（点击弹出当前提示）+ 撤销 -->
+            <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center">
+                <!-- 容量指示：达到上限时转为警示色 -->
+                <TextBlock VerticalAlignment="Center"
+                           FontSize="{StaticResource FontSizeCaption}"
+                           Text="{Binding CapacityText}">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Foreground" Value="{DynamicResource ForegroundDimBrush}" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsCapacityWarning}" Value="True">
+                                    <Setter Property="Foreground" Value="{DynamicResource PinBrush}" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+
+                <!-- 灯泡：点击弹出当前状态的操作提示（含空格预览），弹层内可打开完整说明 -->
+                <Button x:Name="HintButton" Style="{StaticResource GhostButton}" Padding="5"
+                        Margin="4,0,0,0" ToolTip="操作提示"
+                        Click="Hint_Click">
+                    <Path Style="{StaticResource IconStyle}" Data="{StaticResource IconBulb}"
+                          Width="14" Height="14" Stroke="{DynamicResource AccentBrush}" />
+                </Button>
+
+                <Button Style="{StaticResource GhostButton}" Padding="5"
+                        Margin="2,0,0,0" VerticalAlignment="Center"
                         ToolTip="撤销上一步（Ctrl+Z）"
                         IsEnabled="{Binding CanUndo}"
                         Command="{Binding UndoLastRemovalCommand}">
                     <Path Style="{StaticResource IconStyle}" Data="{StaticResource IconUndo}"/>
                 </Button>
-                <Path DockPanel.Dock="Left" Style="{StaticResource IconStyle}"
-                      Data="{StaticResource IconBulb}" Width="14" Height="14"
-                      Stroke="{DynamicResource AccentBrush}"
-                      Margin="4,1,7,0" VerticalAlignment="Center" />
-                <TextBlock FontSize="{StaticResource FontSizeCaption}"
-                           Foreground="{DynamicResource ForegroundDimBrush}"
-                           TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"
-                           VerticalAlignment="Center"
-                           Text="{Binding OperationHint}" />
-            </DockPanel>
-        </Border>
 
-        <!-- 工具栏 -->
-        <DockPanel Grid.Row="1" Margin="12,6,12,4">
-            <!-- 容量指示：达到上限时转为警示色 -->
-            <TextBlock DockPanel.Dock="Left" VerticalAlignment="Center"
-                       FontSize="{StaticResource FontSizeCaption}"
-                       Text="{Binding CapacityText}">
-                <TextBlock.Style>
-                    <Style TargetType="TextBlock">
-                        <Setter Property="Foreground" Value="{DynamicResource ForegroundDimBrush}" />
-                        <Style.Triggers>
-                            <DataTrigger Binding="{Binding IsCapacityWarning}" Value="True">
-                                <Setter Property="Foreground" Value="{DynamicResource PinBrush}" />
-                            </DataTrigger>
-                        </Style.Triggers>
-                    </Style>
-                </TextBlock.Style>
-            </TextBlock>
+                <!-- 提示浮层：StaysOpen=True + 自管理关闭（主窗口是 WS_EX_NOACTIVATE，
+                     StaysOpen=False 的外部点击检测不可靠）。关闭路径：再点灯泡 / 点窗口其它位置 /
+                     Esc / 10 秒自动 / 窗口隐藏。 -->
+                <Popup x:Name="HintPopup" PlacementTarget="{Binding ElementName=HintButton}"
+                       Placement="Bottom" VerticalOffset="6" HorizontalOffset="-8"
+                       StaysOpen="True" AllowsTransparency="True" PopupAnimation="Fade"
+                       Closed="HintPopup_Closed">
+                    <Border Background="{DynamicResource CardBackgroundBrush}"
+                            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                            CornerRadius="8" Padding="12,9" MaxWidth="330">
+                        <StackPanel>
+                            <TextBlock Text="{Binding OperationHint}" TextWrapping="Wrap" LineHeight="19"
+                                       FontSize="{StaticResource FontSizeCaption}"
+                                       Foreground="{DynamicResource ForegroundBrush}" />
+                            <Button Style="{StaticResource GhostButton}" Padding="0" Margin="0,7,0,0"
+                                    HorizontalAlignment="Left"
+                                    ToolTip="打开快捷键与使用说明"
+                                    Click="OpenHelp_Click">
+                                <TextBlock Text="查看全部快捷键 ›"
+                                           FontSize="{StaticResource FontSizeCaption}"
+                                           Foreground="{DynamicResource AccentBrush}" />
+                            </Button>
+                        </StackPanel>
+                    </Border>
+                </Popup>
+            </StackPanel>
             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
                 <!-- 监控开关（眼睛图标，开=睁眼，关=闭眼） -->
                 <ToggleButton Style="{StaticResource GhostToggleButton}" ToolTip="监控剪贴板开关"
@@ -452,11 +470,11 @@
             </StackPanel>
         </DockPanel>
 
-        <Separator Grid.Row="1" VerticalAlignment="Bottom"
+        <Separator Grid.Row="0" VerticalAlignment="Bottom"
                    Background="{DynamicResource BorderBrush}" Margin="0,2" />
 
         <!-- 搜索框 -->
-        <Border Grid.Row="2" Margin="12,2,12,6" Style="{StaticResource SearchBorder}">
+        <Border Grid.Row="1" Margin="12,2,12,6" Style="{StaticResource SearchBorder}">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
@@ -483,7 +501,7 @@
 
         <!-- 标签栏：全部 / 置顶 / 各分组 / 类型筛选 + 新建分组；
              溢出时横向滚动（滚动条隐藏，滚轮横滚，见 TabScroll_PreviewMouseWheel） -->
-        <ScrollViewer Grid.Row="3" x:Name="TabScroll"
+        <ScrollViewer Grid.Row="2" x:Name="TabScroll"
                       Margin="12,2,12,4"
                       HorizontalScrollBarVisibility="Hidden"
                       VerticalScrollBarVisibility="Disabled"
@@ -505,7 +523,7 @@
         </ScrollViewer>
 
         <!-- 列表区 -->
-        <Grid Grid.Row="4">
+        <Grid Grid.Row="3">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />

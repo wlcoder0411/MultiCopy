@@ -51,6 +51,8 @@ public partial class MainWindow : Window
         StateChanged += MainWindow_StateChanged;
         // Esc 键清空搜索框
         PreviewKeyDown += MainWindow_PreviewKeyDown;
+        // 点击窗口其它位置时关闭提示浮层
+        PreviewMouseDown += MainWindow_PreviewMouseDown;
         // 窗口失活（用户切到其他窗口）时恢复 NOACTIVATE 并更新目标窗口。
         // 解决 SearchBox_LostFocus 在窗口失活时不触发的问题：调出 MultiCopy 后移除了 NOACTIVATE，
         // 若用户切换到其他窗口而 LostFocus 未触发，NOACTIVATE 不会恢复，点击列表项时 MultiCopy
@@ -89,6 +91,7 @@ public partial class MainWindow : Window
                     ApplyNoActivate();
                 }
                 CloseImagePreview(); // 预览窗不独立存活，随主窗口隐藏一并关闭
+                HintPopup.IsOpen = false;
                 SaveWindowState();
             }
             _targetHwndBeforeSearch = IntPtr.Zero;
@@ -99,10 +102,14 @@ public partial class MainWindow : Window
     {
         if (_vm == null) return;
 
-        // Esc：先关预览，再清空搜索，最后隐藏窗口
+        // Esc：先关提示浮层 / 预览窗，再清空搜索，最后隐藏窗口
         if (e.Key == Key.Escape)
         {
-            if (_imagePreview != null)
+            if (HintPopup.IsOpen)
+            {
+                HintPopup.IsOpen = false;
+            }
+            else if (_imagePreview != null)
             {
                 CloseImagePreview();
             }
@@ -250,15 +257,52 @@ public partial class MainWindow : Window
     }
 
     // ---------- 快捷键说明 ----------
-    private void Help_Click(object sender, MouseButtonEventArgs e)
+    // 提示浮层自管理关闭：主窗口是 WS_EX_NOACTIVATE，Popup.StaysOpen=False 依赖的
+    // 外部点击检测在该窗口样式下不可靠（点击外部应用时不会关闭），故用 StaysOpen=True
+    // 并显式处理：再点灯泡、点窗口其它位置、Esc、10 秒自动、窗口隐藏。
+    private DispatcherTimer? _hintAutoCloseTimer;
+
+    /// <summary>灯泡按钮：切换操作提示浮层的显示。</summary>
+    private void Hint_Click(object sender, RoutedEventArgs e)
     {
-        // 底部栏内嵌了撤销按钮，点按钮时不要同时弹出说明
-        if (e.OriginalSource is DependencyObject d && FindAncestor<Button>(d) != null) return;
-        e.Handled = true;
-        HelpDialog.Open(this);
+        if (HintPopup.IsOpen)
+        {
+            HintPopup.IsOpen = false;
+            return;
+        }
+        HintPopup.IsOpen = true;
+        _hintAutoCloseTimer ??= CreateHintAutoCloseTimer();
+        _hintAutoCloseTimer.Stop();
+        _hintAutoCloseTimer.Start();
     }
 
-    private void OpenHelp_Click(object sender, RoutedEventArgs e) => HelpDialog.Open(this);
+    private void HintPopup_Closed(object? sender, EventArgs e) => _hintAutoCloseTimer?.Stop();
+
+    /// <summary>提示浮层自动关闭（避免一直遮挡，用户也可点灯泡或 Esc 立即关闭）。</summary>
+    private DispatcherTimer CreateHintAutoCloseTimer()
+    {
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(10) };
+        timer.Tick += (_, _) =>
+        {
+            timer.Stop();
+            HintPopup.IsOpen = false;
+        };
+        return timer;
+    }
+
+    /// <summary>点击窗口内其它位置时关闭提示浮层（灯泡自身交给 Click 切换）。</summary>
+    private void MainWindow_PreviewMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        if (!HintPopup.IsOpen) return;
+        if (e.OriginalSource is DependencyObject d && ReferenceEquals(FindAncestor<Button>(d), HintButton)) return;
+        HintPopup.IsOpen = false;
+    }
+
+    private void OpenHelp_Click(object sender, RoutedEventArgs e)
+    {
+        HintPopup.IsOpen = false;
+        HelpDialog.Open(this);
+    }
 
     // ---------- 设置：点击齿轮按钮弹出设置对话框 ----------
     private void Settings_Click(object sender, RoutedEventArgs e)
