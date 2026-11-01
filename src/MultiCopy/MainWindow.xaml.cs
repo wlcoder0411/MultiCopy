@@ -290,12 +290,32 @@ public partial class MainWindow : Window
         return timer;
     }
 
-    /// <summary>点击窗口内其它位置时关闭提示浮层（灯泡自身交给 Click 切换）。</summary>
+    /// <summary>
+    /// 点击窗口内其它位置时关闭提示浮层。两类点击要排除：
+    /// - 灯泡按钮自身：交给其 Click 切换；
+    /// - 弹层内容（如「查看全部快捷键」）：Popup 虽有独立 HWND，但逻辑树连接主窗口，
+    ///   其鼠标事件仍会隧道经过本处理器；若在这里抢先关掉弹层，弹层 HWND 随之消失，
+    ///   按钮收不到 MouseUp，Click 永远不触发——表现就是"点了没反应"。
+    /// 判据：沿可视化树上溯能到达主窗口自身 = 主窗口内容；到不了（PopupRoot）= 弹层内容。
+    /// </summary>
     private void MainWindow_PreviewMouseDown(object sender, MouseButtonEventArgs e)
     {
         if (!HintPopup.IsOpen) return;
-        if (e.OriginalSource is DependencyObject d && ReferenceEquals(FindAncestor<Button>(d), HintButton)) return;
+        if (e.OriginalSource is not DependencyObject d) return;
+        if (ReferenceEquals(FindAncestor<Button>(d), HintButton)) return;
+        if (!IsInOwnVisualTree(d)) return;
         HintPopup.IsOpen = false;
+    }
+
+    /// <summary>从 d 沿可视化树向上查找主窗口自身。</summary>
+    private bool IsInOwnVisualTree(DependencyObject d)
+    {
+        while (d != null)
+        {
+            if (ReferenceEquals(d, this)) return true;
+            d = VisualTreeHelper.GetParent(d);
+        }
+        return false;
     }
 
     private void OpenHelp_Click(object sender, RoutedEventArgs e)
