@@ -80,6 +80,8 @@ public partial class MainWindow : Window
             {
                 // 恢复显示时自动开启监控（联动：最小化至托盘关、恢复显示开）
                 AppState.Instance.IsMonitoring = true;
+                // 重新断言置顶：显示/隐藏循环后 HWND 的 Z 序可能被系统或其它程序改动
+                EnsureTopmost();
             }
             else
             {
@@ -336,6 +338,7 @@ public partial class MainWindow : Window
     {
         base.OnSourceInitialized(e);
         ApplyNoActivate();
+        EnsureTopmost();
         IntPtr hwnd = new WindowInteropHelper(this).Handle;
         (Application.Current as App)?.StartBackendServices(hwnd);
     }
@@ -393,10 +396,36 @@ public partial class MainWindow : Window
             // 4. 聚焦搜索框（_searchActive 已 true，GotFocus 不会重复记录目标）
             SearchBox.Focus();
             Keyboard.Focus(SearchBox);
+
+            // 5. 重新断言置顶：激活/焦点切换不应改变 Z 序
+            EnsureTopmost();
         }
         catch
         {
             // 失败不影响其他功能（与 SearchBox_GotFocus 容错策略一致）
+        }
+    }
+
+    /// <summary>
+    /// 重新断言窗口置顶。
+    /// WPF 的 Topmost 属性只在下发变化时设置一次 HWND_TOPMOST；之后若调用
+    /// SetWindowLong 改写扩展样式，或被系统/其它程序调整过 Z 序，实际状态可能
+    /// 与属性脱节——表现为"调出时在上面，点一下别的应用就被盖住"。
+    /// 这里按当前 Topmost 偏好强制同步真实 HWND（不移动、不改尺寸、不激活）。
+    /// </summary>
+    private void EnsureTopmost()
+    {
+        if (!Topmost) return;
+        try
+        {
+            IntPtr hwnd = new WindowInteropHelper(this).Handle;
+            if (hwnd == IntPtr.Zero) return;
+            Win32.SetWindowPos(hwnd, Constants.HWND_TOPMOST, 0, 0, 0, 0,
+                Constants.SWP_NOMOVE | Constants.SWP_NOSIZE | Constants.SWP_NOACTIVATE);
+        }
+        catch
+        {
+            // 置顶失败不影响其它功能
         }
     }
 
@@ -409,6 +438,8 @@ public partial class MainWindow : Window
             IntPtr ex = Win32.GetWindowLongCompat(hwnd, Constants.GWL_EXSTYLE);
             int style = ex.ToInt32() | Constants.WS_EX_NOACTIVATE;
             Win32.SetWindowLongCompat(hwnd, Constants.GWL_EXSTYLE, new IntPtr(style));
+            // SetWindowLong 改写扩展样式后重新断言置顶，避免实际 Z 序掉队
+            EnsureTopmost();
         }
         catch
         {
@@ -434,6 +465,8 @@ public partial class MainWindow : Window
             IntPtr ex = Win32.GetWindowLongCompat(hwnd, Constants.GWL_EXSTYLE);
             int style = ex.ToInt32() & ~Constants.WS_EX_NOACTIVATE;
             Win32.SetWindowLongCompat(hwnd, Constants.GWL_EXSTYLE, new IntPtr(style));
+            // 改写扩展样式后重新断言置顶，防止实际 Z 序掉队
+            EnsureTopmost();
 
             // 2. 强制激活窗口：用 AttachThreadInput 把前台线程的输入状态附加到本线程
             //    （SetForegroundWindow 在跨进程时通常被 Windows 限制，AttachThreadInput 是经典绕过）
@@ -1147,7 +1180,27 @@ public partial class MainWindow : Window
     public void SetTopmost(bool value)
     {
         Topmost = value;
+        // WPF 属性变更会下发一次 HWND_TOPMOST/HWND_NOTOPMOST；再断言一次确保真实 Z 序同步
+        ApplyTopmostState(value);
         SettingsStorageService.Update(s => s.IsTopmost = value);
+    }
+
+    /// <summary>用户切换置顶后同步真实 HWND（开启时断言置顶，关闭时落回普通层）。</summary>
+    private void ApplyTopmostState(bool value)
+    {
+        try
+        {
+            IntPtr hwnd = new WindowInteropHelper(this).Handle;
+            if (hwnd == IntPtr.Zero) return;
+            Win32.SetWindowPos(hwnd,
+                value ? Constants.HWND_TOPMOST : Constants.HWND_NOTOPMOST,
+                0, 0, 0, 0,
+                Constants.SWP_NOMOVE | Constants.SWP_NOSIZE | Constants.SWP_NOACTIVATE);
+        }
+        catch
+        {
+            // 忽略：不影响窗口基本功能
+        }
     }
 
     // ---------- 关闭→最小化到托盘（除非强制退出） ----------

@@ -130,6 +130,12 @@ internal static class Win32
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static extern bool SetForegroundWindow(IntPtr hWnd);
 
+    /// <summary>调整窗口 Z 序 / 位置。用于重新断言置顶（不移动、不改尺寸、不激活）。</summary>
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter,
+        int X, int Y, int cx, int cy, uint uFlags);
+
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool fAttach);

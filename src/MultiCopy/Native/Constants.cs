@@ -40,6 +40,14 @@ internal static class Constants
     // 扩展窗口样式
     public const int GWL_EXSTYLE = -20;
     public const int WS_EX_NOACTIVATE = 0x08000000;
+    public const int WS_EX_TOPMOST = 0x00000008;
+
+    // SetWindowPos：置顶断言（HWND_TOPMOST = -1，HWND_NOTOPMOST = -2）
+    public static readonly IntPtr HWND_TOPMOST = new(-1);
+    public static readonly IntPtr HWND_NOTOPMOST = new(-2);
+    public const uint SWP_NOSIZE = 0x0001;
+    public const uint SWP_NOMOVE = 0x0002;
+    public const uint SWP_NOACTIVATE = 0x0010;
 
     // 全局内存分配标志
     public const uint GMEM_MOVEABLE = 0x0002;
