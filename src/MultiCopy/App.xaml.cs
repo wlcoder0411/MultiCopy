@@ -82,6 +82,7 @@ public partial class App : Application
         AppState.Instance.IsPrefixSequenceEnabled = settings.IsPrefixSequenceEnabled;
         AppState.Instance.PrefixSequenceFormat = settings.PrefixSequenceFormat;
         AppState.Instance.PrefixSequencePosition = settings.PrefixSequencePosition;
+        AppState.Instance.MaxQueueItems = settings.MaxQueueItems;
 
         // 首次使用引导：仅在用户未关闭过时显示
         ViewModel.ShowOnboarding = !settings.HasSeenOnboarding;

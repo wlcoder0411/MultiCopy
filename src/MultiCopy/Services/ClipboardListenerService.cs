@@ -107,8 +107,8 @@ public sealed class ClipboardListenerService
 
                     // 容量检查（与图片分支保持一致）：普通项达到上限后不再采集，气泡提示用户清理。
                     // 必须显式放在文本分支内——此前文本分支缺失该检查，导致文本队列无界增长，
-                    // 与 AppState.MaxQueueItems/README 宣称的“上限 30 条”不符。
-                    if (_queue.NormalCount >= AppState.MaxQueueItems)
+                    // 与 AppState.MaxQueueItems 宣称的上限不符。
+                    if (_queue.NormalCount >= _state.MaxQueueItems)
                     {
                         _state.NotifyQueueFull();
                         handled = true;
@@ -133,7 +133,7 @@ public sealed class ClipboardListenerService
                     }
 
                     // 容量检查：超出上限不再采集，气泡提示用户清理
-                    if (_queue.NormalCount >= AppState.MaxQueueItems)
+                    if (_queue.NormalCount >= _state.MaxQueueItems)
                     {
                         _state.NotifyQueueFull();
                         handled = true;

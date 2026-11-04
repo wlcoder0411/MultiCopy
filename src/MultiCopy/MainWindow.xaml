@@ -383,6 +383,16 @@
                     </TextBlock.Style>
                 </TextBlock>
 
+                <!-- 粘贴附加内容徽标：前缀/序号/后缀任一启用时显示，点击直达设置 -->
+                <TextBlock Margin="8,0,0,0" VerticalAlignment="Center"
+                           FontSize="{StaticResource FontSizeCaption}"
+                           Foreground="{DynamicResource AccentBrush}"
+                           Cursor="Hand"
+                           ToolTip="粘贴时将自动附加以上内容（点击打开设置）"
+                           Text="{Binding PasteBadgeText}"
+                           Visibility="{Binding HasPasteBadge, Converter={x:Static infra:BoolToVisibilityConverter.Instance}}"
+                           MouseLeftButtonDown="Settings_Click" />
+
                 <!-- 灯泡：点击弹出当前状态的操作提示（含空格预览），弹层内可打开完整说明 -->
                 <Button x:Name="HintButton" Style="{StaticResource GhostButton}" Padding="5"
                         Margin="4,0,0,0" ToolTip="操作提示"

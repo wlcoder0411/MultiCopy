@@ -79,9 +79,17 @@ public sealed partial class MainViewModel : ObservableObject
     /// <summary>相对时间刷新定时器（30 秒）。</summary>
     private readonly DispatcherTimer _relativeTimeTimer;
 
-    /// <summary>容量指示文本（如 "18/30"）。</summary>
+    /// <summary>容量指示文本（如 "18/30"，分母为可配置的队列容量上限）。</summary>
     [ObservableProperty]
-    private string _capacityText = "0/30";
+    private string _capacityText = $"0/{AppState.DefaultMaxQueueItems}";
+
+    /// <summary>粘贴附加内容徽标文本（如 "前缀·序号·后缀"；空=未启用任何附加内容）。</summary>
+    [ObservableProperty]
+    private string _pasteBadgeText = string.Empty;
+
+    /// <summary>粘贴附加内容徽标是否可见（任一附加内容启用）。</summary>
+    [ObservableProperty]
+    private bool _hasPasteBadge;
 
     /// <summary>容量是否已达上限（用于警示色）。</summary>
     [ObservableProperty]
@@ -131,8 +139,11 @@ public sealed partial class MainViewModel : ObservableObject
         _state.ModeChanged += OnAppStateModeChanged;
         _isMonitoring = _state.IsMonitoring;
         _state.MonitoringChanged += OnAppStateMonitoringChanged;
+        _state.QueueCapacityChanged += OnQueueCapacityChanged;
+        _state.PasteSettingsChanged += OnPasteSettingsChanged;
         ThemeService.ThemeChanged += OnThemeChanged;
         _queue.Changed += OnQueueChanged;
+        RefreshPasteBadge();
 
         // 相对时间每 30 秒刷新一次，保证「刚刚 / N 分钟前」近似实时
         _relativeTimeTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
@@ -145,6 +156,32 @@ public sealed partial class MainViewModel : ObservableObject
     private void OnAppStateModeChanged(object? sender, bool modeOn) => ModeOn = modeOn;
 
     private void OnAppStateMonitoringChanged(object? sender, bool value) => IsMonitoring = value;
+
+    /// <summary>队列容量上限变化时仅刷新容量指示（避免整表重建）。</summary>
+    private void OnQueueCapacityChanged(object? sender, EventArgs e) => RefreshCapacity();
+
+    /// <summary>粘贴前后缀/序号设置变化时刷新附加内容徽标。</summary>
+    private void OnPasteSettingsChanged(object? sender, EventArgs e) => RefreshPasteBadge();
+
+    /// <summary>刷新粘贴附加内容徽标：前缀/序号/后缀任一启用时在容量旁显示，点击直达设置。</summary>
+    private void RefreshPasteBadge()
+    {
+        var parts = new List<string>(3);
+        if (_state.IsPastePrefixEnabled) parts.Add("前缀");
+        // 序号仅在前缀启用时实际生效（BuildPasteText 规则），保持徽标与真实行为一致
+        if (_state.IsPastePrefixEnabled && _state.IsPrefixSequenceEnabled) parts.Add("序号");
+        if (_state.IsPasteSuffixEnabled) parts.Add("后缀");
+        PasteBadgeText = string.Join("·", parts);
+        HasPasteBadge = parts.Count > 0;
+    }
+
+    /// <summary>刷新顶部容量指示 n/N（N 为可配置的队列容量上限）。</summary>
+    private void RefreshCapacity()
+    {
+        int normalCount = _queue.NormalCount;
+        CapacityText = $"{normalCount}/{_state.MaxQueueItems}";
+        IsCapacityWarning = normalCount >= _state.MaxQueueItems;
+    }
 
     /// <summary>主题变化时刷新溢出菜单中主题项的可视性。</summary>
     private void OnThemeChanged(object? sender, EventArgs e)
@@ -295,9 +332,7 @@ public sealed partial class MainViewModel : ObservableObject
         RebuildTabs();
         RebuildRows(advanceIfMissing);
 
-        int normalCount = _queue.NormalCount;
-        CapacityText = $"{normalCount}/{AppState.MaxQueueItems}";
-        IsCapacityWarning = normalCount >= AppState.MaxQueueItems;
+        RefreshCapacity();
         CanUndo = _queue.CanUndo;
 
         AllEmpty = !Rows.OfType<ClipboardItemRow>().Any();
@@ -497,7 +532,15 @@ public sealed partial class MainViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void ClearNormal() => _queue.ClearNormal();
+    private void ClearNormal()
+    {
+        // 普通队列清空会连带清空撤销栈（防旧项倒灌），误触不可恢复，需二次确认
+        if (_queue.NormalCount == 0) return;
+        if (!Views.ConfirmDialog.Show(System.Windows.Application.Current.MainWindow, "清空普通队列",
+                $"确定要清空普通队列的全部 {_queue.NormalCount} 条内容吗？此操作不可撤销。", "清空"))
+            return;
+        _queue.ClearNormal();
+    }
 
     [RelayCommand]
     private void ClearAll() => _queue.ClearAll();

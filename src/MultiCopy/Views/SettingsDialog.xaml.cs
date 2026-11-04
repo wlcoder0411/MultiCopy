@@ -9,10 +9,10 @@ using MultiCopy.State;
 namespace MultiCopy.Views;
 
 /// <summary>
-/// 设置对话框：自定义全局快捷键。
+/// 设置对话框：自定义全局快捷键与粘贴前后缀/序号。
 /// 用按键捕获（PreviewKeyDown）记录组合，比 ComboBox 更直觉。
-/// 应用/确定时调用 HotkeyService.UpdateSettings 即时注册；
-/// 取消时若已应用过改动，还原到对话框打开时的原始配置。
+/// 所有改动仅在点「确定」时经 HotkeyService.UpdateSettings / SettingsStorageService 应用，
+/// 取消即丢弃未保存的修改。
 /// </summary>
 public partial class SettingsDialog : Window
 {
@@ -24,14 +24,12 @@ public partial class SettingsDialog : Window
     private int _capturedKey;
     private bool _hasValidCapture;
 
-    // 已应用到 HotkeyService 的组合（取消时若与 original 不同需还原）
-    private bool _appliedEnabled;
-    private HotkeyModifierKeys _appliedMods;
-    private int _appliedKey;
-
     // 当前编辑中的前后缀内容
     private string _currentPrefix = string.Empty;
     private string _currentSuffix = string.Empty;
+
+    // 打开时生效的队列容量（取消对比与解析失败回退用）
+    private readonly int _originalCapacity;
 
     private SettingsDialog(HotkeyService hotkey)
     {
@@ -41,11 +39,8 @@ public partial class SettingsDialog : Window
 
         // 初始化 UI 为当前生效配置
         EnableCheckBox.IsChecked = _original.HotkeyEnabled;
-        _appliedEnabled = _original.HotkeyEnabled;
-        _appliedMods = (HotkeyModifierKeys)_original.Modifiers;
-        _appliedKey = _original.Key;
-        _capturedMods = _appliedMods;
-        _capturedKey = _appliedKey;
+        _capturedMods = (HotkeyModifierKeys)_original.Modifiers;
+        _capturedKey = _original.Key;
         _hasValidCapture = _original.HotkeyEnabled;
         if (_original.HotkeyEnabled)
             CaptureBox.Text = HotkeyFormatter.Format(_capturedMods, _capturedKey);
@@ -65,7 +60,15 @@ public partial class SettingsDialog : Window
         SequenceFormatCombo.SelectedIndex = (int)state.PrefixSequenceFormat;
         SequencePositionCombo.SelectedIndex = (int)state.PrefixSequencePosition;
 
+        // 初始化队列容量
+        _originalCapacity = state.MaxQueueItems;
+        QueueCapacityTextBox.Text = _originalCapacity.ToString();
+
+        // 序号自增依赖前缀：按初始状态同步序号编辑区可用性
+        UpdateSequenceEditorEnabled();
+
         UpdateCaptureEnabled();
+        UpdatePastePreview();
         Loaded += (_, _) => { if (EnableCheckBox.IsChecked == true) CaptureBox.Focus(); };
     }
 
@@ -87,6 +90,70 @@ public partial class SettingsDialog : Window
         SuffixSummaryTextBox.Text = display;
     }
 
+    // ---------- 粘贴效果实时预览 ----------
+    /// <summary>预览联动入口：前后缀/序号任一配置变化时触发（XAML 事件挂接）。</summary>
+    private void PreviewSetting_Changed(object sender, RoutedEventArgs e)
+    {
+        if (PreviewTextBlock == null) return; // XAML 解析期间预览控件尚未就绪
+        UpdatePastePreview();
+    }
+
+    /// <summary>前缀/序号开关变化：同步序号编辑区可用状态，并刷新预览。
+    /// 序号自增仅在前缀启用时实际生效（见 AppState.BuildPasteText），UI 保持一致。</summary>
+    private void SequenceDependency_Changed(object sender, RoutedEventArgs e)
+    {
+        UpdateSequenceEditorEnabled();
+        if (PreviewTextBlock != null) UpdatePastePreview();
+    }
+
+    /// <summary>按「启用前缀」「启用序号自增」状态启用/禁用序号配置行（禁用时 WPF 自动置灰）。</summary>
+    private void UpdateSequenceEditorEnabled()
+    {
+        bool prefixOn = EnablePrefixCheckBox.IsChecked == true;
+        EnableSequenceCheckBox.IsEnabled = prefixOn;
+        SequenceEditorGrid.IsEnabled = prefixOn && EnableSequenceCheckBox.IsChecked == true;
+    }
+
+    /// <summary>
+    /// 刷新粘贴效果预览：按启用状态拼接 前缀+序号+正文+后缀（示例正文，不递增序号）。
+    /// 拼接规则与 AppState.BuildPasteText 一致，起始序号校验与 DoApply 相同。
+    /// </summary>
+    private void UpdatePastePreview()
+    {
+        const string body = "这里是复制的内容";
+        bool prefixEnabled = EnablePrefixCheckBox.IsChecked == true;
+        bool suffixEnabled = EnableSuffixCheckBox.IsChecked == true;
+
+        if (!prefixEnabled && !suffixEnabled)
+        {
+            PreviewTextBlock.Text = "未启用前/后缀，粘贴原文";
+            return;
+        }
+
+        string prefix = prefixEnabled ? _currentPrefix : string.Empty;
+        string suffix = suffixEnabled ? _currentSuffix : string.Empty;
+        bool sequenceEnabled = EnableSequenceCheckBox.IsChecked == true;
+
+        string result;
+        if (!prefixEnabled || !sequenceEnabled)
+        {
+            result = prefix + body + suffix;
+        }
+        else
+        {
+            int start = int.TryParse(SequenceStartTextBox.Text, out int parsed) && parsed >= 1 ? parsed : 1;
+            var format = (PrefixSequenceFormat)SequenceFormatCombo.SelectedIndex;
+            var position = (PrefixSequencePosition)SequencePositionCombo.SelectedIndex;
+            string seq = SequenceFormatter.Format(start, format);
+            string fullPrefix = position == PrefixSequencePosition.BeforePrefix ? seq + prefix : prefix + seq;
+            result = fullPrefix + body + suffix;
+        }
+
+        PreviewTextBlock.Text = result.Length == 0
+            ? "（前/后缀内容为空，粘贴原文）"
+            : result;
+    }
+
     /// <summary>点击前缀摘要框：弹出多行编辑对话框。</summary>
     private void PrefixSummaryBorder_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
@@ -95,6 +162,7 @@ public partial class SettingsDialog : Window
         {
             _currentPrefix = result;
             UpdatePrefixSummary();
+            UpdatePastePreview();
         }
     }
 
@@ -106,6 +174,7 @@ public partial class SettingsDialog : Window
         {
             _currentSuffix = result;
             UpdateSuffixSummary();
+            UpdatePastePreview();
         }
     }
 
@@ -133,31 +202,61 @@ public partial class SettingsDialog : Window
 
     private void UpdateCaptureEnabled()
     {
-        bool en = EnableCheckBox.IsChecked == true;
-        CaptureBox.IsEnabled = en;
-        OkButton.IsEnabled = en;
+        // 仅禁用捕获区；「确定」始终可用，否则禁用热键后将无法保存任何设置
+        CaptureBox.IsEnabled = EnableCheckBox.IsChecked == true;
     }
 
     // ---------- 序号输入限制 ----------
-    /// <summary>限制起始序号只能输入正整数。</summary>
+    /// <summary>限制起始序号只能输入正整数（按拼入后的完整文本校验，拦下 0 与前导零）。</summary>
     private void SequenceStartTextBox_PreviewTextInput(object sender, TextCompositionEventArgs e)
     {
-        e.Handled = !int.TryParse(e.Text, out int v) || v < 0;
+        e.Handled = !IsValidPositiveIntInput(SequenceStartTextBox, e.Text);
     }
 
-    /// <summary>限制粘贴操作只能粘贴数字。</summary>
+    /// <summary>限制粘贴操作只能粘贴 ≥1 的整数。</summary>
     private void SequenceStartTextBox_Pasting(object sender, DataObjectPastingEventArgs e)
     {
         if (e.DataObject.GetDataPresent(DataFormats.Text))
         {
             string text = (string)e.DataObject.GetData(DataFormats.Text);
-            if (!int.TryParse(text, out _))
+            if (!int.TryParse(text, out int v) || v < 1)
                 e.CancelCommand();
         }
         else
         {
             e.CancelCommand();
         }
+    }
+
+    // ---------- 队列容量输入限制 ----------
+    /// <summary>限制容量输入只能输入正整数（按拼入后的完整文本校验，拦下 0 与前导零）。</summary>
+    private void QueueCapacityTextBox_PreviewTextInput(object sender, TextCompositionEventArgs e)
+    {
+        e.Handled = !IsValidPositiveIntInput(QueueCapacityTextBox, e.Text);
+    }
+
+    /// <summary>限制粘贴操作只能粘贴 ≥1 的整数。</summary>
+    private void QueueCapacityTextBox_Pasting(object sender, DataObjectPastingEventArgs e)
+    {
+        if (e.DataObject.GetDataPresent(DataFormats.Text))
+        {
+            string text = (string)e.DataObject.GetData(DataFormats.Text);
+            if (!int.TryParse(text, out int v) || v < 1)
+                e.CancelCommand();
+        }
+        else
+        {
+            e.CancelCommand();
+        }
+    }
+
+    /// <summary>校验按键拼入后的完整文本是否为 ≥1 的整数（拦下 0 与前导零）。</summary>
+    private static bool IsValidPositiveIntInput(TextBox box, string input)
+    {
+        // 拼入位置按选区处理：有选区=替换选区，无选区=插入光标处
+        string text = box.Text.Remove(box.SelectionStart, box.SelectionLength);
+        text = text.Insert(box.SelectionStart, input);
+        return int.TryParse(text, out int v) && v >= 1;
     }
 
     // ---------- 按键捕获 ----------
@@ -189,7 +288,7 @@ public partial class SettingsDialog : Window
         _capturedKey = KeyInterop.VirtualKeyFromKey(key);
         _hasValidCapture = true;
         CaptureBox.Text = HotkeyFormatter.Format(_capturedMods, _capturedKey);
-        HintBlock.Text = "点击「应用」立即生效";
+        HintBlock.Text = "点击「确定」立即生效";
     }
 
     private static bool IsModifierKey(Key k) =>
@@ -216,13 +315,7 @@ public partial class SettingsDialog : Window
 
     private void Cancel_Click(object sender, RoutedEventArgs e)
     {
-        // 若已应用过与原始不同的配置，还原到原始
-        if (_appliedEnabled != _original.HotkeyEnabled ||
-            _appliedMods != (HotkeyModifierKeys)_original.Modifiers ||
-            _appliedKey != _original.Key)
-        {
-            _hotkey.UpdateSettings(_original.HotkeyEnabled, _original.Modifiers, _original.Key);
-        }
+        // 所有改动仅在「确定」时应用；取消即丢弃，无需还原
         DialogResult = false;
     }
 
@@ -248,9 +341,6 @@ public partial class SettingsDialog : Window
             return false;
         }
 
-        _appliedEnabled = enabled;
-        _appliedMods = _capturedMods;
-        _appliedKey = _capturedKey;
         HintBlock.Text = "已生效" + (enabled ? $"（{HotkeyFormatter.Format(_capturedMods, _capturedKey)}）" : "（已禁用）");
 
 
@@ -264,6 +354,17 @@ public partial class SettingsDialog : Window
         int sequenceStart = int.TryParse(SequenceStartTextBox.Text, out int parsed) && parsed >= 1 ? parsed : 1;
         var seqFormat = (PrefixSequenceFormat)SequenceFormatCombo.SelectedIndex;
         var seqPosition = (PrefixSequencePosition)SequencePositionCombo.SelectedIndex;
+        // 队列容量校验：解析失败或越界（5–200）时提示并保持对话框打开，避免静默改值
+        if (!int.TryParse(QueueCapacityTextBox.Text, out int queueCapacity)
+            || queueCapacity < MultiCopy.State.AppState.MinQueueItems
+            || queueCapacity > MultiCopy.State.AppState.MaxQueueItemsLimit)
+        {
+            MessageBox.Show(this,
+                $"队列容量需在 {MultiCopy.State.AppState.MinQueueItems}–{MultiCopy.State.AppState.MaxQueueItemsLimit} 之间。",
+                "队列容量无效", MessageBoxButton.OK, MessageBoxImage.Warning);
+            QueueCapacityTextBox.Focus();
+            return false;
+        }
 
         var currentSettings = SettingsStorageService.Load();
         bool settingsChanged = false;
@@ -309,6 +410,11 @@ public partial class SettingsDialog : Window
             currentSettings.PrefixSequencePosition = seqPosition;
             settingsChanged = true;
         }
+        if (currentSettings.MaxQueueItems != queueCapacity)
+        {
+            currentSettings.MaxQueueItems = queueCapacity;
+            settingsChanged = true;
+        }
         // 当前序号值可能已因粘贴递增，始终写回最新值
         if (currentSettings.PrefixSequenceCurrent != MultiCopy.State.AppState.Instance.PrefixSequenceCurrent)
         {
@@ -329,6 +435,7 @@ public partial class SettingsDialog : Window
         state.PrefixSequenceStart = sequenceStart;
         state.PrefixSequenceFormat = seqFormat;
         state.PrefixSequencePosition = seqPosition;
+        state.MaxQueueItems = queueCapacity; // Setter 内夹取范围，变化时经事件刷新主界面 n/N
         // 起始序号变更时同步重置当前序号
         if (state.PrefixSequenceCurrent < sequenceStart)
             state.PrefixSequenceCurrent = sequenceStart;

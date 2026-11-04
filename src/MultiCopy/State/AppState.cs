@@ -34,8 +34,12 @@ public sealed class AppState
 {
     public static AppState Instance { get; } = new();
 
-    /// <summary>普通队列容量上限（含未分组+所有分组）。超出后不再采集，并提示用户清理。</summary>
-    public const int MaxQueueItems = 30;
+    /// <summary>普通队列容量上限默认值。可在设置对话框修改（允许范围见 Min/MaxQueueItems）。</summary>
+    public const int DefaultMaxQueueItems = 30;
+    /// <summary>队列容量允许的下限。</summary>
+    public const int MinQueueItems = 5;
+    /// <summary>队列容量允许的上限。</summary>
+    public const int MaxQueueItemsLimit = 200;
 
     /// <summary>
     /// 粘贴回音抑制窗口（毫秒）。队列粘贴后，目标应用可能把刚粘贴的内容
@@ -50,6 +54,7 @@ public sealed class AppState
     private volatile bool _modeOn;
     private volatile bool _isMonitoring = true; // 默认开启监控
     private string? _activeGroupId;
+    private int _maxQueueItems = DefaultMaxQueueItems; // 普通队列容量上限
     private string _pastePrefix = string.Empty; // 粘贴前缀内容（空=无前缀）
     private string _pasteSuffix = string.Empty; // 粘贴后缀内容（空=无后缀）
     private bool _isPastePrefixEnabled;         // true=启用前缀
@@ -99,6 +104,23 @@ public sealed class AppState
             if (_activeGroupId == value) return;
             _activeGroupId = value;
             ActiveGroupChanged?.Invoke(this, value);
+        }
+    }
+
+    /// <summary>
+    /// 普通队列容量上限（含未分组+所有分组）。超出后不再采集，并提示用户清理。
+    /// 由启动加载与设置对话框设置；Setter 夹取到 [MinQueueItems, MaxQueueItemsLimit]。
+    /// 注意：调小容量不清理已超量的存量条目，仅暂停采集，待用户删到上限以内自动恢复。
+    /// </summary>
+    public int MaxQueueItems
+    {
+        get => _maxQueueItems;
+        set
+        {
+            int v = Math.Clamp(value, MinQueueItems, MaxQueueItemsLimit);
+            if (_maxQueueItems == v) return;
+            _maxQueueItems = v;
+            QueueCapacityChanged?.Invoke(this, EventArgs.Empty);
         }
     }
 
@@ -297,6 +319,9 @@ public sealed class AppState
 
     /// <summary>队列已满通知（ClipboardListenerService 触发，TrayIconService 订阅显示气泡）。</summary>
     public event EventHandler? QueueFullNotification;
+
+    /// <summary>队列容量上限变化通知（设置对话框确定后触发，主界面刷新 n/N 显示）。</summary>
+    public event EventHandler? QueueCapacityChanged;
 
     /// <summary>触发队列已满通知。</summary>
     public void NotifyQueueFull() => QueueFullNotification?.Invoke(this, EventArgs.Empty);

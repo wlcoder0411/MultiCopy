@@ -58,6 +58,9 @@ public sealed class TrayIconService : IDisposable
         _state.ModeChanged += OnModeChanged;
         _state.MonitoringChanged += OnMonitoringChanged;
         _state.QueueFullNotification += OnQueueFull;
+        _queue.Changed += OnQueueChangedForToolTip;
+        _state.QueueCapacityChanged += OnQueueCapacityChangedForToolTip;
+        UpdateTrayToolTip();
     }
 
     private ContextMenu BuildMenu()
@@ -89,7 +92,15 @@ public sealed class TrayIconService : IDisposable
         menu.Items.Add(_miMonitor);
 
         var miClearNormal = new MenuItem { Header = "清空普通队列(_C)" };
-        miClearNormal.Click += (_, _) => _queue.ClearNormal();
+        miClearNormal.Click += (_, _) =>
+        {
+            // 与 ⋯ 菜单一致：清空后撤销栈一并清空，不可恢复，需二次确认
+            if (_queue.NormalCount == 0) return;
+            if (!Views.ConfirmDialog.Show(_window, "清空普通队列",
+                    $"确定要清空普通队列的全部 {_queue.NormalCount} 条内容吗？此操作不可撤销。", "清空"))
+                return;
+            _queue.ClearNormal();
+        };
         menu.Items.Add(miClearNormal);
 
         menu.Items.Add(new Separator());
@@ -178,11 +189,16 @@ public sealed class TrayIconService : IDisposable
         }
         else
         {
-            _tray.ToolTipText = _state.ModeOn
-                ? "MultiCopy — 队列粘贴模式：开"
-                : "MultiCopy — 队列粘贴模式：关";
+            string mode = _state.ModeOn ? "队列粘贴模式：开" : "队列粘贴模式：关";
+            _tray.ToolTipText = $"MultiCopy — {_queue.NormalCount}/{_state.MaxQueueItems} 条 · {mode}";
         }
     }
+
+    /// <summary>队列变化时刷新托盘 tooltip 的计数。</summary>
+    private void OnQueueChangedForToolTip(object? sender, EventArgs e) => UpdateTrayToolTip();
+
+    /// <summary>容量上限变化时刷新托盘 tooltip 的计数。</summary>
+    private void OnQueueCapacityChangedForToolTip(object? sender, EventArgs e) => UpdateTrayToolTip();
 
     private void ToggleWindowVisibility()
     {
@@ -320,6 +336,8 @@ public sealed class TrayIconService : IDisposable
         _state.ModeChanged -= OnModeChanged;
         _state.MonitoringChanged -= OnMonitoringChanged;
         _state.QueueFullNotification -= OnQueueFull;
+        _queue.Changed -= OnQueueChangedForToolTip;
+        _state.QueueCapacityChanged -= OnQueueCapacityChangedForToolTip;
         if (_autoStartRecheckTimer != null)
         {
             _autoStartRecheckTimer.Stop();

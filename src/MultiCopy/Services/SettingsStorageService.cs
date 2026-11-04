@@ -48,6 +48,9 @@ public static class SettingsStorageService
             // 序号相关字段兜底（缺失时用默认值）
             if (dto.PrefixSequenceStart < 1) dto.PrefixSequenceStart = 1;
             if (dto.PrefixSequenceCurrent < 1) dto.PrefixSequenceCurrent = dto.PrefixSequenceStart;
+            // 队列容量兜底：越界视为无效，回退默认值
+            if (dto.MaxQueueItems < AppState.MinQueueItems || dto.MaxQueueItems > AppState.MaxQueueItemsLimit)
+                dto.MaxQueueItems = AppState.DefaultMaxQueueItems;
             // 窗口几何合法性兜底：尺寸过小视为无效，回退到 XAML 默认值
             if (dto.WindowWidth is double w && w < 320) dto.WindowWidth = null;
             if (dto.WindowHeight is double h && h < 360) dto.WindowHeight = null;
@@ -153,6 +156,8 @@ public static class SettingsStorageService
         public PrefixSequenceFormat PrefixSequenceFormat { get; set; } = PrefixSequenceFormat.Plain;
         /// <summary>序号与前缀内容的位置关系。</summary>
         public PrefixSequencePosition PrefixSequencePosition { get; set; } = PrefixSequencePosition.AfterPrefix;
+        /// <summary>普通队列容量上限（默认 30，允许范围 5–200）。</summary>
+        public int MaxQueueItems { get; set; } = AppState.DefaultMaxQueueItems;
         /// <summary>界面主题（默认暗色）。</summary>
         public AppTheme Theme { get; set; } = AppTheme.Dark;
         /// <summary>窗口左边界（null=使用默认位置）。</summary>
