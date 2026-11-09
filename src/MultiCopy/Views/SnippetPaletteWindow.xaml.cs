@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Interop;
 using MultiCopy.Models;
 using MultiCopy.Services;
 using MultiCopy.ViewModels;
@@ -45,9 +46,53 @@ public partial class SnippetPaletteWindow : Window
         };
         Loaded += (_, _) =>
         {
-            SearchBox.Focus();
+            ActivatePalette();
         };
         RefreshList();
+    }
+
+    /// <summary>
+    /// 强制激活速取窗并聚焦搜索框。
+    /// 主窗口带 WS_EX_NOACTIVATE 且应用通常不在前台，Windows 的前台锁会拒绝
+    /// ShowActivated 的激活请求——表现为窗口弹出来了，但按键仍落到原来的应用，
+    /// 输入过滤与 Esc 全部失效。这里用与主窗口相同的 AttachThreadInput 方案强制激活。
+    /// </summary>
+    private void ActivatePalette()
+    {
+        try
+        {
+            IntPtr hwnd = new WindowInteropHelper(this).Handle;
+            if (hwnd == IntPtr.Zero) return;
+
+            IntPtr fg = Win32.GetForegroundWindow();
+            if (fg != IntPtr.Zero && fg != hwnd)
+            {
+                uint fgThread = Win32.GetWindowThreadProcessId(fg, out _);
+                uint ourThread = Win32.GetCurrentThreadId();
+                if (fgThread != ourThread)
+                {
+                    Win32.AttachThreadInput(fgThread, ourThread, true);
+                    Win32.SetForegroundWindow(hwnd);
+                    Win32.AttachThreadInput(fgThread, ourThread, false);
+                }
+                else
+                {
+                    Win32.SetForegroundWindow(hwnd);
+                }
+            }
+            else
+            {
+                Win32.SetForegroundWindow(hwnd);
+            }
+
+            Activate();
+            SearchBox.Focus();
+            Keyboard.Focus(SearchBox);
+        }
+        catch
+        {
+            // 激活失败仍可鼠标操作，不影响其它功能
+        }
     }
 
     private void OnSnippetsChanged(object? sender, EventArgs e) => RefreshList();
