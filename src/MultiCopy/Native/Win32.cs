@@ -115,6 +115,11 @@ internal static class Win32
     [DllImport("user32.dll")]
     internal static extern IntPtr GetForegroundWindow();
 
+    /// <summary>取鼠标光标屏幕坐标（片段速取窗定位用）。</summary>
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool GetCursorPos(out POINT lpPoint);
+
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static extern bool IsWindow(IntPtr hWnd);

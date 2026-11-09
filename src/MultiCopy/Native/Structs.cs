@@ -54,3 +54,11 @@ internal struct INPUT
 
     public static int Size => Marshal.SizeOf<INPUT>();
 }
+
+/// <summary>屏幕坐标点（GetCursorPos 用）。</summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct POINT
+{
+    public int X;
+    public int Y;
+}

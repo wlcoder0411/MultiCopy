@@ -28,6 +28,8 @@ public partial class App : Application
     public TrayIconService? Tray { get; private set; }
     public HotkeyService? HotkeyService { get; private set; }
     public MainViewModel? ViewModel { get; private set; }
+    public PasteExecutor? PasteExecutor { get; private set; }
+    public SnippetLibrary? Snippets { get; private set; }
 
     public bool ForceExit { get; set; }
 
@@ -60,13 +62,15 @@ public partial class App : Application
         // 初始化指纹：避免首次普通队列变化触发对已加载置顶项/分组的冗余写盘
         _lastPinnedFingerprint = BuildPinnedFingerprint(Queue.PinnedItems);
         _lastGroupsFingerprint = BuildGroupsFingerprint(Queue.Groups);
-        // 统一清理孤儿图片：联合 PinnedItems + Groups 的图片引用，避免互相误删
+        // 统一清理孤儿图片：联合 PinnedItems + Groups 中的图片引用，避免互相误删
         CleanupOrphanImagesUnified();
         ClipboardSvc = new ClipboardService();
         Listener = new ClipboardListenerService(Queue, ClipboardSvc);
         KeyboardHook = new KeyboardHookService(Queue, ClipboardSvc);
-        var pasteExecutor = new PasteExecutor(ClipboardSvc);
-        ViewModel = new MainViewModel(Queue, pasteExecutor);
+        PasteExecutor = new PasteExecutor(ClipboardSvc);
+        Snippets = new SnippetLibrary(SnippetStorageService.Load());
+        ViewModel = new MainViewModel(Queue, PasteExecutor, Snippets);
+
 
         // 置顶项/分组变化时即时持久化（防丢失，OnExit 兜底）
         Queue.Changed += OnQueueChangedForPersistence;
@@ -97,6 +101,13 @@ public partial class App : Application
         window.ApplyPersistedWindowState(settings);
         // HotkeyService 必须在 TrayIconService 之前创建（TrayIconService 构造需要它）
         HotkeyService = new HotkeyService(window, settings);
+        // 片段速取热键：呼出速取窗（独立于主窗口显隐）。
+        // WM_HOTKEY 在消息钩子上下文里到达，此处若同步创建/关闭窗口可能与焦点切换、
+        // IME(TSF) 分离竞争造成死锁，整体延迟到 Background 优先级处理。
+        HotkeyService.SnippetHotkeyTriggered += (_, _) =>
+            window.Dispatcher.BeginInvoke(
+                () => window.OpenSnippetPalette(),
+                System.Windows.Threading.DispatcherPriority.Background);
         Tray = new TrayIconService(window, Queue, HotkeyService);
         // 开机自启带 --minimized 参数：仅驻留托盘，不显示主窗口
         bool minimized = e.Args.Contains("--minimized", StringComparer.OrdinalIgnoreCase);

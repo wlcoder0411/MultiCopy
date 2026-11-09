@@ -79,4 +79,31 @@ public sealed class PasteExecutor
             queue.RemoveNormal(item);
         }
     }
+
+    /// <summary>
+    /// 原样粘贴文本（片段库/速取窗专用）：不追加前后缀与序号（BuildPasteText 不参与），
+    /// 不涉及队列出队。写入剪贴板 → 记录回音 → 延迟注入 Ctrl+V。
+    /// 返回是否成功注入（写剪贴板失败或被 UIPI 阻止均算失败，调用方据此决定是否提示）。
+    /// </summary>
+    public bool ExecuteText(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return false;
+        if (!_clipboard.SetClipboardTextSync(text)) return false;
+        // 目标应用可能把刚粘贴的内容写回剪贴板（如资源管理器重命名框），记录供回音抑制
+        _state.RecordPastedText(text);
+
+        _state.IsSimulatingPaste = true;
+        bool injected;
+        try
+        {
+            // 与 Execute 相同的 50ms：等剪贴板观察者（Office 剪贴板）处理完广播再注入
+            System.Threading.Thread.Sleep(50);
+            injected = Win32.SendCtrlV();
+        }
+        finally
+        {
+            _state.IsSimulatingPaste = false;
+        }
+        return injected;
+    }
 }

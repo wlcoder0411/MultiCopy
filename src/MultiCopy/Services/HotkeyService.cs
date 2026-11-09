@@ -11,16 +11,21 @@ namespace MultiCopy.Services;
 /// </summary>
 public sealed class HotkeyService : IDisposable
 {
-    private const int HotkeyId = 0x9000; // RegisterHotKey 的热键 id（单热键用固定值即可）
+    private const int HotkeyId = 0x9000;        // 主窗口热键 id
+    private const int SnippetHotkeyId = 0x9001; // 片段速取热键 id
 
     private readonly MainWindow _window;
     private SettingsStorageService.SettingsDto _settings;
     private IntPtr _hwnd;
     private HwndSource? _source;
     private bool _registered;
+    private bool _snippetRegistered;
 
     /// <summary>热键设置变化（设置对话框应用后触发），供 TrayIconService 刷新菜单文本。</summary>
     public event EventHandler<SettingsStorageService.SettingsDto>? SettingsChanged;
+
+    /// <summary>片段速取热键触发（App 订阅 → 打开片段速取窗）。</summary>
+    public event EventHandler? SnippetHotkeyTriggered;
 
     /// <summary>当前生效设置（供设置对话框初始化显示）。</summary>
     public SettingsStorageService.SettingsDto CurrentSettings => _settings;
@@ -40,11 +45,14 @@ public sealed class HotkeyService : IDisposable
 
         if (_settings.HotkeyEnabled)
             TryRegister(_settings.Modifiers, _settings.Key);
+        if (_settings.SnippetHotkeyEnabled)
+            TryRegisterSnippet(_settings.SnippetModifiers, _settings.SnippetKey);
     }
 
     public void Stop()
     {
         Unregister();
+        UnregisterSnippet();
         _source?.RemoveHook(WndProc);
         _source = null;
     }
@@ -85,6 +93,32 @@ public sealed class HotkeyService : IDisposable
         return (true, null);
     }
 
+    /// <summary>
+    /// 更新片段速取热键（设置对话框"确定"调用）。增量落盘 + 失败回滚的语义与 UpdateSettings 相同。
+    /// </summary>
+    public (bool ok, string? error) UpdateSnippetHotkey(bool enabled, uint modifiers, int key)
+    {
+        var previous = _settings;
+        var current = SettingsStorageService.Load();
+        current.SnippetHotkeyEnabled = enabled;
+        current.SnippetModifiers = modifiers;
+        current.SnippetKey = key;
+
+        UnregisterSnippet();
+        if (enabled && !TryRegisterSnippet(modifiers, key))
+        {
+            // 注册失败：回滚注册而非写盘（语义同 UpdateSettings）
+            if (previous.SnippetHotkeyEnabled)
+                TryRegisterSnippet(previous.SnippetModifiers, previous.SnippetKey);
+            return (false, "快捷键注册失败，可能已被其他程序占用，请换一组组合试试。");
+        }
+
+        _settings = current;
+        SettingsStorageService.Save(current);
+        SettingsChanged?.Invoke(this, current);
+        return (true, null);
+    }
+
     private bool TryRegister(uint modifiers, int key)
     {
         if (_hwnd == IntPtr.Zero) return false;
@@ -104,12 +138,35 @@ public sealed class HotkeyService : IDisposable
         _registered = false;
     }
 
+    private bool TryRegisterSnippet(uint modifiers, int key)
+    {
+        if (_hwnd == IntPtr.Zero) return false;
+        bool ok = Win32.RegisterHotKey(_hwnd, SnippetHotkeyId, modifiers, key);
+        _snippetRegistered = ok;
+        return ok;
+    }
+
+    private void UnregisterSnippet()
+    {
+        if (!_snippetRegistered) return;
+        Win32.UnregisterHotKey(_hwnd, SnippetHotkeyId);
+        _snippetRegistered = false;
+    }
+
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
-        if (msg == Constants.WM_HOTKEY && wParam == (IntPtr)HotkeyId)
+        if (msg == Constants.WM_HOTKEY)
         {
-            OnHotkeyTriggered();
-            handled = true;
+            if (wParam == (IntPtr)HotkeyId)
+            {
+                OnHotkeyTriggered();
+                handled = true;
+            }
+            else if (wParam == (IntPtr)SnippetHotkeyId)
+            {
+                SnippetHotkeyTriggered?.Invoke(this, EventArgs.Empty);
+                handled = true;
+            }
         }
         return IntPtr.Zero;
     }

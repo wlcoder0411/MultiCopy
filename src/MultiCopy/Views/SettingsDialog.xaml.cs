@@ -19,10 +19,9 @@ public partial class SettingsDialog : Window
     private readonly HotkeyService _hotkey;
     private readonly SettingsStorageService.SettingsDto _original; // 打开时生效的配置（取消还原用）
 
-    // 当前捕获区显示的（尚未应用的）组合
-    private HotkeyModifierKeys _capturedMods;
-    private int _capturedKey;
-    private bool _hasValidCapture;
+    // 主热键与片段速取热键的捕获器（捕获逻辑相同，实例化两次）
+    private readonly HotkeyCapture _mainCapture;
+    private readonly HotkeyCapture _snippetCapture;
 
     // 当前编辑中的前后缀内容
     private string _currentPrefix = string.Empty;
@@ -36,14 +35,14 @@ public partial class SettingsDialog : Window
         _hotkey = hotkey;
         _original = hotkey.CurrentSettings;
         InitializeComponent();
+        _mainCapture = new HotkeyCapture(CaptureBox, HintBlock);
+        _snippetCapture = new HotkeyCapture(SnippetCaptureBox, SnippetHintBlock);
 
         // 初始化 UI 为当前生效配置
         EnableCheckBox.IsChecked = _original.HotkeyEnabled;
-        _capturedMods = (HotkeyModifierKeys)_original.Modifiers;
-        _capturedKey = _original.Key;
-        _hasValidCapture = _original.HotkeyEnabled;
-        if (_original.HotkeyEnabled)
-            CaptureBox.Text = HotkeyFormatter.Format(_capturedMods, _capturedKey);
+        _mainCapture.Reset((HotkeyModifierKeys)_original.Modifiers, _original.Key, _original.HotkeyEnabled);
+        SnippetEnableCheckBox.IsChecked = _original.SnippetHotkeyEnabled;
+        _snippetCapture.Reset((HotkeyModifierKeys)_original.SnippetModifiers, _original.SnippetKey, _original.SnippetHotkeyEnabled);
 
         // 初始化前后缀内容和启用状态
         var state = MultiCopy.State.AppState.Instance;
@@ -204,6 +203,7 @@ public partial class SettingsDialog : Window
     {
         // 仅禁用捕获区；「确定」始终可用，否则禁用热键后将无法保存任何设置
         CaptureBox.IsEnabled = EnableCheckBox.IsChecked == true;
+        SnippetCaptureBox.IsEnabled = SnippetEnableCheckBox.IsChecked == true;
     }
 
     // ---------- 序号输入限制 ----------
@@ -260,51 +260,80 @@ public partial class SettingsDialog : Window
     }
 
     // ---------- 按键捕获 ----------
-    private void CaptureBox_GotFocus(object sender, RoutedEventArgs e)
+    /// <summary>
+    /// 按键捕获器：管理一个只读 TextBox 的组合键捕获（PreviewKeyDown 记录修饰键+主键）。
+    /// 主热键与片段速取热键共用此类，各自持有独立的捕获状态与提示区。
+    /// </summary>
+    private sealed class HotkeyCapture
     {
-        HintBlock.Text = "按下想要的组合键（需至少一个修饰键）";
-    }
+        private readonly TextBox _box;
+        private readonly Action<string> _setHint;
 
-    private void CaptureBox_PreviewKeyDown(object sender, KeyEventArgs e)
-    {
-        e.Handled = true; // 阻止文本输入
+        public HotkeyModifierKeys Mods { get; private set; }
 
-        // Alt 按下时 e.Key=System，真正按键在 SystemKey
-        Key key = (e.Key == Key.System) ? e.SystemKey : e.Key;
+        /// <summary>主键的虚拟键码。命名避开 Input.Key 枚举，防止类内引用被遮蔽。</summary>
+        public int VirtualKey { get; private set; }
 
-        // 纯修饰键：等待主键，不记录
-        if (IsModifierKey(key)) return;
+        public bool HasValid { get; private set; }
 
-        // 修饰键状态（Keyboard.Modifiers 反映当前实际按下的修饰键）
-        var mods = WpfToWin32(Keyboard.Modifiers);
-        if (mods == HotkeyModifierKeys.None)
+        public HotkeyCapture(TextBox box, TextBlock hint)
         {
-            HintBlock.Text = "请配合修饰键（Alt/Ctrl/Shift/Win）一起按下";
-            _hasValidCapture = false;
-            return;
+            _box = box;
+            _setHint = text => hint.Text = text;
+            box.PreviewKeyDown += OnPreviewKeyDown;
+            box.GotFocus += (_, _) => _setHint("按下想要的组合键（需至少一个修饰键）");
         }
 
-        _capturedMods = mods;
-        _capturedKey = KeyInterop.VirtualKeyFromKey(key);
-        _hasValidCapture = true;
-        CaptureBox.Text = HotkeyFormatter.Format(_capturedMods, _capturedKey);
-        HintBlock.Text = "点击「确定」立即生效";
-    }
+        /// <summary>初始化为给定组合（对话框打开时同步当前生效值；hasValid=false 表示未启用/未捕获）。</summary>
+        public void Reset(HotkeyModifierKeys mods, int key, bool hasValid)
+        {
+            Mods = mods;
+            VirtualKey = key;
+            HasValid = hasValid;
+            _box.Text = hasValid ? HotkeyFormatter.Format(mods, key) : string.Empty;
+        }
 
-    private static bool IsModifierKey(Key k) =>
-        k == Key.LeftCtrl || k == Key.RightCtrl ||
-        k == Key.LeftAlt || k == Key.RightAlt ||
-        k == Key.LeftShift || k == Key.RightShift ||
-        k == Key.LWin || k == Key.RWin;
+        private void OnPreviewKeyDown(object sender, KeyEventArgs e)
+        {
+            e.Handled = true; // 阻止文本输入
 
-    private static HotkeyModifierKeys WpfToWin32(ModifierKeys m)
-    {
-        HotkeyModifierKeys r = HotkeyModifierKeys.None;
-        if (m.HasFlag(ModifierKeys.Alt)) r |= HotkeyModifierKeys.Alt;
-        if (m.HasFlag(ModifierKeys.Control)) r |= HotkeyModifierKeys.Control;
-        if (m.HasFlag(ModifierKeys.Shift)) r |= HotkeyModifierKeys.Shift;
-        if (m.HasFlag(ModifierKeys.Windows)) r |= HotkeyModifierKeys.Win;
-        return r;
+            // Alt 按下时 e.Key=System，真正按键在 SystemKey
+            Key key = (e.Key == Key.System) ? e.SystemKey : e.Key;
+
+            // 纯修饰键：等待主键，不记录
+            if (IsModifierKey(key)) return;
+
+            // 修饰键状态（Keyboard.Modifiers 反映当前实际按下的修饰键）
+            var mods = WpfToWin32(Keyboard.Modifiers);
+            if (mods == HotkeyModifierKeys.None)
+            {
+                _setHint("请配合修饰键（Alt/Ctrl/Shift/Win）一起按下");
+                HasValid = false;
+                return;
+            }
+
+            Mods = mods;
+            VirtualKey = KeyInterop.VirtualKeyFromKey(key);
+            HasValid = true;
+            _box.Text = HotkeyFormatter.Format(Mods, VirtualKey);
+            _setHint("点击「确定」立即生效");
+        }
+
+        private static bool IsModifierKey(Key k) =>
+            k == Key.LeftCtrl || k == Key.RightCtrl ||
+            k == Key.LeftAlt || k == Key.RightAlt ||
+            k == Key.LeftShift || k == Key.RightShift ||
+            k == Key.LWin || k == Key.RWin;
+
+        private static HotkeyModifierKeys WpfToWin32(ModifierKeys m)
+        {
+            HotkeyModifierKeys r = HotkeyModifierKeys.None;
+            if (m.HasFlag(ModifierKeys.Alt)) r |= HotkeyModifierKeys.Alt;
+            if (m.HasFlag(ModifierKeys.Control)) r |= HotkeyModifierKeys.Control;
+            if (m.HasFlag(ModifierKeys.Shift)) r |= HotkeyModifierKeys.Shift;
+            if (m.HasFlag(ModifierKeys.Windows)) r |= HotkeyModifierKeys.Win;
+            return r;
+        }
     }
 
     // ---------- 按钮 ----------
@@ -323,14 +352,20 @@ public partial class SettingsDialog : Window
     private bool DoApply()
     {
         bool enabled = EnableCheckBox.IsChecked == true;
-        if (enabled && !_hasValidCapture)
+        if (enabled && !_mainCapture.HasValid)
         {
             HintBlock.Text = "请先捕获一个有效的快捷键组合";
             return false;
         }
+        bool snippetEnabled = SnippetEnableCheckBox.IsChecked == true;
+        if (snippetEnabled && !_snippetCapture.HasValid)
+        {
+            SnippetHintBlock.Text = "请先捕获一个有效的快捷键组合";
+            return false;
+        }
 
-        uint mods = enabled ? (uint)_capturedMods : 0;
-        int key = enabled ? _capturedKey : 0;
+        uint mods = enabled ? (uint)_mainCapture.Mods : 0;
+        int key = enabled ? _mainCapture.VirtualKey : 0;
 
         var (ok, error) = _hotkey.UpdateSettings(enabled, mods, key);
         if (!ok)
@@ -341,7 +376,22 @@ public partial class SettingsDialog : Window
             return false;
         }
 
-        HintBlock.Text = "已生效" + (enabled ? $"（{HotkeyFormatter.Format(_capturedMods, _capturedKey)}）" : "（已禁用）");
+        HintBlock.Text = "已生效" + (enabled ? $"（{HotkeyFormatter.Format(_mainCapture.Mods, _mainCapture.VirtualKey)}）" : "（已禁用）");
+
+        // 应用片段速取热键（独立持久化；失败提示并保持对话框打开，主热键已生效不受影响）
+        var (snipOk, snipError) = _hotkey.UpdateSnippetHotkey(snippetEnabled,
+            snippetEnabled ? (uint)_snippetCapture.Mods : 0,
+            snippetEnabled ? _snippetCapture.VirtualKey : 0);
+        if (!snipOk)
+        {
+            MessageBox.Show(this, snipError, "快捷键注册失败",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            SnippetHintBlock.Text = snipError;
+            return false;
+        }
+        SnippetHintBlock.Text = "已生效" + (snippetEnabled
+            ? $"（{HotkeyFormatter.Format(_snippetCapture.Mods, _snippetCapture.VirtualKey)}）"
+            : "（已禁用）");
 
 
         // 保存粘贴前后缀设置（独立于快捷键保存逻辑，立即生效并持久化）

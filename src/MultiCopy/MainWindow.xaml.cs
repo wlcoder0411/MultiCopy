@@ -334,6 +334,46 @@ public partial class MainWindow : Window
             SettingsDialog.Show(this, app.HotkeyService);
     }
 
+    // ---------- 片段库窗口 ----------
+    private void SnippetButton_Click(object sender, RoutedEventArgs e) => OpenSnippetManager();
+
+    /// <summary>
+    /// 打开片段库管理窗（独立 Topmost 工具窗，可拖动/调整大小；已打开则关闭 = toggle）。
+    /// </summary>
+    public void OpenSnippetManager()
+    {
+        var app = Application.Current as App;
+        if (app?.Snippets == null || app.PasteExecutor == null) return;
+        var existing = Application.Current.Windows.OfType<SnippetManagerWindow>().FirstOrDefault();
+        if (existing != null)
+        {
+            existing.Close();
+            return;
+        }
+        new SnippetManagerWindow(app.Snippets, app.PasteExecutor).Show();
+    }
+
+    /// <summary>
+    /// 打开片段速取窗（托盘菜单 / 全局热键入口）。
+    /// 已打开时关闭（toggle 语义）。粘贴目标为打开时的前台窗口（速取窗自行记录）。
+    /// </summary>
+    public void OpenSnippetPalette()
+    {
+        var app = Application.Current as App;
+        if (app?.Snippets == null || app.PasteExecutor == null) return;
+        var existing = Application.Current.Windows.OfType<SnippetPaletteWindow>().FirstOrDefault();
+        if (existing != null)
+        {
+            // 延迟关闭：速取窗可能正持有输入法焦点（用户刚打过字），同步 Close
+            // 会在焦点/IME 分离流程中竞争造成死锁
+            existing.Dispatcher.BeginInvoke(
+                existing.Close, System.Windows.Threading.DispatcherPriority.Background);
+            return;
+        }
+        var palette = new SnippetPaletteWindow(app.Snippets, app.PasteExecutor);
+        palette.Show();
+    }
+
     protected override void OnSourceInitialized(EventArgs e)
     {
         base.OnSourceInitialized(e);

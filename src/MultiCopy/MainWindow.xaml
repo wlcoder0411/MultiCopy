@@ -123,6 +123,11 @@
                                   Command="{Binding PlacementTarget.Tag.SplitLinesCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                                   CommandParameter="{Binding PlacementTarget.DataContext.Item, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                                   Visibility="{Binding PlacementTarget.DataContext.CanSplit, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource Bool2Vis}}" />
+                        <MenuItem Header="存入片段库"
+                                  ToolTip="保存为常用片段，随时粘贴（不占队列）"
+                                  Command="{Binding PlacementTarget.Tag.SaveToSnippetsCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                  CommandParameter="{Binding PlacementTarget.DataContext.Item, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                  Visibility="{Binding PlacementTarget.DataContext.CanSaveSnippet, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource Bool2Vis}}" />
                         <Separator />
                         <MenuItem Header="置顶"
                                   Command="{Binding PlacementTarget.Tag.PinCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
@@ -407,6 +412,14 @@
                         IsEnabled="{Binding CanUndo}"
                         Command="{Binding UndoLastRemovalCommand}">
                     <Path Style="{StaticResource IconStyle}" Data="{StaticResource IconUndo}"/>
+                </Button>
+
+                <!-- 片段库：常用语句速取（不占队列、不常驻列表） -->
+                <Button x:Name="SnippetButton" Style="{StaticResource GhostButton}" Padding="5"
+                        Margin="2,0,0,0" VerticalAlignment="Center"
+                        ToolTip="片段库：常用语句速取"
+                        Click="SnippetButton_Click">
+                    <Path Style="{StaticResource IconStyle}" Data="{StaticResource IconBookmark}"/>
                 </Button>
 
                 <!-- 提示浮层：StaysOpen=True + 自管理关闭（主窗口是 WS_EX_NOACTIVATE，

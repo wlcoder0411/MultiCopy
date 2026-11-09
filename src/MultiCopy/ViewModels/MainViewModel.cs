@@ -130,10 +130,11 @@ public sealed partial class MainViewModel : ObservableObject
         set => _state.ActiveGroupId = value;
     }
 
-    public MainViewModel(ClipboardQueue queue, PasteExecutor pasteExecutor)
+    public MainViewModel(ClipboardQueue queue, PasteExecutor pasteExecutor, SnippetLibrary snippets)
     {
         _queue = queue;
         _pasteExecutor = pasteExecutor;
+        _snippets = snippets;
 
         _modeOn = _state.ModeOn;
         _state.ModeChanged += OnAppStateModeChanged;
@@ -173,6 +174,20 @@ public sealed partial class MainViewModel : ObservableObject
         if (_state.IsPasteSuffixEnabled) parts.Add("后缀");
         PasteBadgeText = string.Join("·", parts);
         HasPasteBadge = parts.Count > 0;
+    }
+
+    // ---------- 片段库 ----------
+    private readonly SnippetLibrary _snippets;
+
+    /// <summary>把队列/置顶中的文本条目存入片段库（条目右键菜单入口）。</summary>
+    [RelayCommand]
+    private void SaveToSnippets(ClipboardItem? item)
+    {
+        if (item is not TextClipboardItem text || string.IsNullOrEmpty(text.Text)) return;
+        var result = SnippetEditDialog.Show(Application.Current.MainWindow, "存入片段库",
+            content: text.Text);
+        if (result == null) return;
+        _snippets.Add(result.Name, result.Content, result.IsSecret);
     }
 
     /// <summary>刷新顶部容量指示 n/N（N 为可配置的队列容量上限）。</summary>

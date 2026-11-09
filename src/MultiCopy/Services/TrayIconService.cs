@@ -76,6 +76,11 @@ public sealed class TrayIconService : IDisposable
         miShow.Click += (_, _) => ToggleWindowVisibility();
         menu.Items.Add(miShow);
 
+        // 片段速取：呼出常用片段速取窗（与全局热键 Alt+S 同一路径）
+        var miSnippet = new MenuItem { Header = "片段速取(_Q)" };
+        miSnippet.Click += (_, _) => _window.OpenSnippetPalette();
+        menu.Items.Add(miSnippet);
+
         // 窗口置顶开关（状态持久化由 MainWindow.SetTopmost 负责）
         _miTopmost = new MenuItem { Header = "窗口置顶(_P)", IsCheckable = true, IsChecked = _window.Topmost };
         _miTopmost.Click += (_, _) => _window.SetTopmost(_miTopmost.IsChecked);

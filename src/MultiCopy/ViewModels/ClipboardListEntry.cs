@@ -72,4 +72,7 @@ public sealed class ClipboardItemRow : ClipboardListEntry
 
     /// <summary>可使用「移动到分组」等普通项操作。</summary>
     public bool CanManage => CanPin;
+
+    /// <summary>可存入片段库（仅文本项；置顶项也允许）。</summary>
+    public bool CanSaveSnippet => Item is TextClipboardItem;
 }

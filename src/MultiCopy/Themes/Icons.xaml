@@ -38,4 +38,7 @@
     <!-- 撤销（回转箭头） -->
     <Geometry x:Key="IconUndo">M9 14 4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 0 11H11</Geometry>
 
+    <!-- 片段库（书签） -->
+    <Geometry x:Key="IconBookmark">M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z</Geometry>
+
 </ResourceDictionary>

@@ -42,6 +42,8 @@ public static class SettingsStorageService
             if (dto == null) return Default;
             // 合法性校验：主键不能为 0
             if (dto.Key <= 0) dto.Key = 0x5A;
+            // 片段速取热键兜底：主键不能为 0
+            if (dto.SnippetKey <= 0) dto.SnippetKey = 0x53;
             // 兜底归一化：新字段缺失时反序列化为 null
             dto.PastePrefix ??= string.Empty;
             dto.PasteSuffix ??= string.Empty;
@@ -138,6 +140,10 @@ public static class SettingsStorageService
         public bool HotkeyEnabled { get; set; } = true;
         public uint Modifiers { get; set; } = (uint)HotkeyModifierKeys.Alt;
         public int Key { get; set; } = 0x5A;
+        /// <summary>片段速取热键（默认 Alt+S）：呼出速取窗，搜索后 Enter 原样粘贴常用片段。</summary>
+        public bool SnippetHotkeyEnabled { get; set; } = true;
+        public uint SnippetModifiers { get; set; } = (uint)HotkeyModifierKeys.Alt;
+        public int SnippetKey { get; set; } = 0x53; // VK_S
         /// <summary>粘贴前缀内容（空字符串=无前缀）。默认无前缀。</summary>
         public string PastePrefix { get; set; } = string.Empty;
         /// <summary>粘贴后缀内容（空字符串=无后缀）。默认无后缀。</summary>
