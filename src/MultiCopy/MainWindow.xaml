@@ -436,6 +436,12 @@
                             <TextBlock Text="{Binding OperationHint}" TextWrapping="Wrap" LineHeight="19"
                                        FontSize="{StaticResource FontSizeCaption}"
                                        Foreground="{DynamicResource ForegroundBrush}" />
+                            <!-- 常驻补充提示：全局快捷键、鼠标操作与标签栏语义（完整列表见帮助对话框） -->
+                            <Border Height="1" Margin="0,8,0,7"
+                                    Background="{DynamicResource BorderBrush}" Opacity="0.7" />
+                            <TextBlock Text="{Binding FeatureHint}" TextWrapping="Wrap" LineHeight="19"
+                                       FontSize="{StaticResource FontSizeCaption}"
+                                       Foreground="{DynamicResource ForegroundDimBrush}" />
                             <Button Style="{StaticResource GhostButton}" Padding="0" Margin="0,7,0,0"
                                     HorizontalAlignment="Left"
                                     ToolTip="打开快捷键与使用说明"

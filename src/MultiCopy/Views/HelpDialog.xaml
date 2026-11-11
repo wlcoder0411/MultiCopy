@@ -42,6 +42,7 @@
                 <TextBlock Style="{StaticResource SectionHeader}" Text="全局快捷键（任何窗口）" />
                 <TextBlock Style="{StaticResource HelpText}">
                     <Run Style="{StaticResource KeyRun}" Text="Alt+Z" /><Run Text="　调出 / 隐藏 MultiCopy" /><LineBreak />
+                    <Run Style="{StaticResource KeyRun}" Text="Alt+S" /><Run Text="　呼出片段速取框（输入即过滤，Enter 原样粘贴）" /><LineBreak />
                     <Run Style="{StaticResource KeyRun}" Text="Ctrl+V" /><Run Text="　队列粘贴模式开启时，按序粘贴下一条" /><LineBreak />
                     <Run Style="{StaticResource KeyRun}" Text="Ctrl+Shift+V / Shift+V" /><Run Text="　普通粘贴，不消耗队列" />
                 </TextBlock>
@@ -64,7 +65,8 @@
                     <Run Style="{StaticResource KeyRun}" Text="点击分组标签" /><Run Text="　设为活动分组；点「全部」回到全局模式" /><LineBreak />
                     <Run Style="{StaticResource KeyRun}" Text="拖动分组标签" /><Run Text="　调整普通分组的顺序（置顶分组固定在前）" /><LineBreak />
                     <Run Style="{StaticResource KeyRun}" Text="右键分组标签" /><Run Text="　置顶、重命名、清空组内项、删除分组" /><LineBreak />
-                    <Run Style="{StaticResource KeyRun}" Text="右键条目" /><Run Text="　置顶、移动到分组、按行拆分（文本）、删除" /><LineBreak />
+                    <Run Style="{StaticResource KeyRun}" Text="右键条目" /><Run Text="　置顶、移动到分组、按行拆分（文本）、存入片段库、删除" /><LineBreak />
+                    <Run Style="{StaticResource KeyRun}" Text="工具栏书签按钮" /><Run Text="　打开片段库窗口，编辑或删除已存片段" /><LineBreak />
                     <Run Style="{StaticResource KeyRun}" Text="拖拽条目" /><Run Text="　导出到目标窗口输入框或文件夹" />
                 </TextBlock>
 

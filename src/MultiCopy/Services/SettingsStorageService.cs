@@ -174,6 +174,10 @@ public static class SettingsStorageService
         public double? WindowWidth { get; set; }
         /// <summary>窗口高度（null=使用默认高度）。</summary>
         public double? WindowHeight { get; set; }
+        /// <summary>片段速取窗左边界（null=跟随鼠标光标弹出）。</summary>
+        public double? SnippetPaletteLeft { get; set; }
+        /// <summary>片段速取窗上边界（null=跟随鼠标光标弹出）。</summary>
+        public double? SnippetPaletteTop { get; set; }
         /// <summary>窗口是否置顶（默认开启）。</summary>
         public bool IsTopmost { get; set; } = true;
         /// <summary>是否已看过首次使用引导。</summary>

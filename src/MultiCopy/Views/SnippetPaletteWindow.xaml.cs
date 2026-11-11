@@ -1,8 +1,10 @@
 using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Interop;
+using System.Windows.Media;
 using MultiCopy.Models;
 using MultiCopy.Services;
 using MultiCopy.ViewModels;
@@ -42,10 +44,13 @@ public partial class SnippetPaletteWindow : Window
         };
         SourceInitialized += (_, _) =>
         {
-            PositionNearCursor();
+            RestorePosition();
         };
         Loaded += (_, _) =>
         {
+            // 尺寸（SizeToContent=Height）此时才确定：按实际高度再收敛一次，
+            // 避免记住的位置靠近屏幕底部时窗口被任务栏/屏幕边缘截断
+            ClampCurrentPosition();
             ActivatePalette();
         };
         RefreshList();
@@ -97,22 +102,131 @@ public partial class SnippetPaletteWindow : Window
 
     private void OnSnippetsChanged(object? sender, EventArgs e) => RefreshList();
 
-    /// <summary>在鼠标光标附近显示（夹取到工作区内）。</summary>
+    /// <summary>SizeToContent=Height 下首次定位时高度尚未量出，用估算值做边界收敛。</summary>
+    private const double EstimatedHeight = 320;
+
+    /// <summary>
+    /// 恢复上次拖动后的位置；从未拖动过时退回「跟随鼠标光标弹出」。
+    /// </summary>
+    private void RestorePosition()
+    {
+        var settings = SettingsStorageService.Load();
+        if (settings.SnippetPaletteLeft is double left && settings.SnippetPaletteTop is double top)
+        {
+            ApplyPosition(left, top);
+            return;
+        }
+        PositionNearCursor();
+    }
+
+    /// <summary>在鼠标光标附近显示。</summary>
     private void PositionNearCursor()
     {
-        var wa = SystemParameters.WorkArea;
-        // SizeToContent=Height 下高度未量出，用估算值夹取；宽 440 为定值
-        const double estimatedHeight = 320;
         if (Win32.GetCursorPos(out var pt))
         {
-            Left = Math.Min(Math.Max(pt.X + 8, wa.Left), Math.Max(wa.Left, wa.Right - Width - 4));
-            Top = Math.Min(Math.Max(pt.Y + 8, wa.Top), Math.Max(wa.Top, wa.Bottom - estimatedHeight - 4));
+            Point dip = ToDip(pt);
+            ApplyPosition(dip.X + 8, dip.Y + 8);
         }
         else
         {
-            Left = wa.Left + (wa.Width - Width) / 2;
-            Top = wa.Top + 80;
+            var wa = SystemParameters.WorkArea;
+            ApplyPosition(wa.Left + (wa.Width - Width) / 2, wa.Top + 80);
         }
+    }
+
+    /// <summary>
+    /// 把窗口放到指定 DIP 坐标，并收敛到虚拟屏范围内（多显示器也适用）。
+    /// 尺寸未知时按估算高度收敛，Loaded 后会再按实际高度收敛一次。
+    /// </summary>
+    private void ApplyPosition(double left, double top)
+    {
+        double virtualLeft = SystemParameters.VirtualScreenLeft;
+        double virtualTop = SystemParameters.VirtualScreenTop;
+        double virtualRight = virtualLeft + SystemParameters.VirtualScreenWidth;
+        double virtualBottom = virtualTop + SystemParameters.VirtualScreenHeight;
+
+        double width = ActualWidth > 0 ? ActualWidth : Width;
+        double height = ActualHeight > 0 ? ActualHeight : EstimatedHeight;
+
+        // 不做额外内缩：保存的位置在屏幕内时原样恢复，只有越界才收敛
+        Left = Math.Min(Math.Max(left, virtualLeft), Math.Max(virtualLeft, virtualRight - width));
+        Top = Math.Min(Math.Max(top, virtualTop), Math.Max(virtualTop, virtualBottom - height));
+    }
+
+    /// <summary>按当前实际尺寸重新收敛位置（Loaded 时调用）。</summary>
+    private void ClampCurrentPosition() => ApplyPosition(Left, Top);
+
+    /// <summary>
+    /// 物理像素坐标转 WPF 设备无关单位（DIP）。
+    /// 进程为 PerMonitorV2，GetCursorPos 返回物理像素，直接当 Left/Top 会在
+    /// 高缩放屏幕上产生偏移，必须经当前窗口的 DPI 变换。
+    /// </summary>
+    private Point ToDip(POINT pt)
+    {
+        var source = PresentationSource.FromVisual(this);
+        if (source?.CompositionTarget != null)
+            return source.CompositionTarget.TransformFromDevice.Transform(new Point(pt.X, pt.Y));
+        return new Point(pt.X, pt.Y);
+    }
+
+    // ---------- 拖动窗口 ----------
+
+    /// <summary>
+    /// 按住窗口空白处拖动（搜索框、列表项、滚动条等交互控件除外）。
+    /// 拖动结束后把坐标写入 settings.json，下次呼出固定在该位置。
+    /// </summary>
+    private void Root_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ChangedButton != MouseButton.Left) return;
+        if (e.ButtonState != MouseButtonState.Pressed) return;
+        if (IsInteractiveElement(e.OriginalSource as DependencyObject)) return;
+
+        double beforeLeft = Left;
+        double beforeTop = Top;
+        try
+        {
+            DragMove();
+        }
+        catch (InvalidOperationException)
+        {
+            // 窗口尚未完成初始化时 DragMove 会抛异常，忽略即可
+            return;
+        }
+
+        // 仅真正移动过才记录：单击空白处不应把「跟随光标」锁定成固定位置
+        if (Left != beforeLeft || Top != beforeTop)
+            SavePosition();
+    }
+
+    /// <summary>沿可视/逻辑树向上判断是否落在交互控件内（这些区域不响应窗口拖动）。</summary>
+    private static bool IsInteractiveElement(DependencyObject? source)
+    {
+        var d = source;
+        while (d != null)
+        {
+            if (d is TextBoxBase || d is ListBoxItem || d is ScrollBar || d is ButtonBase)
+                return true;
+
+            d = d switch
+            {
+                Visual => VisualTreeHelper.GetParent(d),
+                FrameworkContentElement fce => fce.Parent,
+                _ => null
+            };
+        }
+        return false;
+    }
+
+    /// <summary>持久化当前窗口位置（仅在用户拖动后调用）。</summary>
+    private void SavePosition()
+    {
+        double left = Left;
+        double top = Top;
+        SettingsStorageService.Update(s =>
+        {
+            s.SnippetPaletteLeft = left;
+            s.SnippetPaletteTop = top;
+        });
     }
 
     private void RefreshList()

@@ -120,6 +120,17 @@ public sealed partial class MainViewModel : ObservableObject
     private const string EmptyOperationHint =
         "Ctrl+C 收集内容 · Alt+Z 调出 · 悬停图片可预览大图 · 点击查看说明";
 
+    /// <summary>
+    /// 灯泡浮层的常驻功能提示：动态状态行之外，补齐不易发现的全局快捷键、
+    /// 鼠标操作与标签栏语义。完整列表仍以 HelpDialog 为准。
+    /// </summary>
+    public string FeatureHint { get; } =
+        "• Alt+S 片段速取 · 悬停图片预览 · 单击粘贴 / 双击置顶保留\n" +
+        "• 队列粘贴开启后 Ctrl+V 按序出队\n" +
+        "• 右键条目：置顶 / 移动到分组 / 按行拆分 / 存入片段库\n" +
+        "• 点击分组标签 = 新复制归入该组 · 拖动标签排序 · 右键管理\n" +
+        "• 拖动条目导出 · Del 删除 · Esc 清空搜索 / 隐藏窗口";
+
     /// <summary>当前是否在搜索状态（SearchText 非空白）。</summary>
     public bool IsSearching => !string.IsNullOrWhiteSpace(SearchText);
 

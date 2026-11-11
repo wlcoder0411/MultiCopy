@@ -19,6 +19,6 @@ public sealed class Snippet
 
     public DateTime CreatedAt { get; set; } = DateTime.Now;
 
-    /// <summary>最近一次粘贴使用时间（仅记录，不改变列表顺序）。</summary>
+    /// <summary>最近一次粘贴使用时间（用于片段排序：最近用过的优先）。</summary>
     public DateTime? LastUsedAt { get; set; }
 }

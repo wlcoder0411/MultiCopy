@@ -11,8 +11,16 @@
         PreviewKeyDown="Window_PreviewKeyDown">
     <Border Margin="8" Background="{DynamicResource CardBackgroundBrush}"
             BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
-            CornerRadius="10" Padding="10">
+            CornerRadius="10" Padding="10"
+            Cursor="SizeAll"
+            MouseLeftButtonDown="Root_MouseLeftButtonDown">
         <StackPanel>
+            <!-- 拖动区：标题即窗口把手（列表占满时仍可稳定拖动） -->
+            <TextBlock Text="片段速取" HorizontalAlignment="Center" Margin="0,0,0,6"
+                       FontSize="{StaticResource FontSizeCaption}"
+                       Foreground="{DynamicResource ForegroundDimBrush}"
+                       ToolTip="按住标题或空白处拖动窗口" />
+
             <!-- 搜索框 -->
             <Border Style="{StaticResource SearchBorder}" Margin="0,0,0,8">
                 <TextBox x:Name="SearchBox"
@@ -69,7 +77,7 @@
 
             <!-- 底部提示 -->
             <TextBlock Margin="0,8,0,0"
-                       Text="↑↓ 选择 · Enter 粘贴 · Esc 关闭"
+                       Text="↑↓ 选择 · Enter 粘贴 · Esc 关闭 · 拖动标题移动"
                        FontSize="{StaticResource FontSizeCaption}"
                        Foreground="{DynamicResource ForegroundDimBrush}" />
         </StackPanel>

@@ -47,7 +47,7 @@ public sealed class SnippetLibrary
         SaveAndNotify();
     }
 
-    /// <summary>记录一次粘贴使用（更新 LastUsedAt 并落盘，不触发 Changed）。</summary>
+    /// <summary>记录一次粘贴使用（更新 LastUsedAt 并落盘；不触发 Changed，下次过滤/打开时按最近使用排序）。</summary>
     public void MarkUsed(string id)
     {
         var snippet = _snippets.FirstOrDefault(x => x.Id == id);
@@ -56,13 +56,21 @@ public sealed class SnippetLibrary
         SnippetStorageService.Save(_snippets);
     }
 
-    /// <summary>按关键字过滤（匹配名称与内容，不区分大小写；空关键字返回全部，保持原顺序）。</summary>
+    /// <summary>
+    /// 按关键字过滤（匹配名称与内容，不区分大小写；空关键字返回全部）。
+    /// 结果按「最近活动」排序：最近粘贴过的优先，从未使用过的按创建时间倒序，
+    /// 让常用片段在速取窗里自然靠前，减少翻找；LINQ 排序稳定，同分保持插入顺序。
+    /// </summary>
     public IEnumerable<Snippet> Search(string? keyword)
     {
-        if (string.IsNullOrWhiteSpace(keyword)) return _snippets;
-        return _snippets.Where(s =>
-            s.Name.Contains(keyword, StringComparison.OrdinalIgnoreCase) ||
-            s.Content.Contains(keyword, StringComparison.OrdinalIgnoreCase));
+        IEnumerable<Snippet> source = _snippets;
+        if (!string.IsNullOrWhiteSpace(keyword))
+        {
+            source = source.Where(s =>
+                s.Name.Contains(keyword, StringComparison.OrdinalIgnoreCase) ||
+                s.Content.Contains(keyword, StringComparison.OrdinalIgnoreCase));
+        }
+        return source.OrderByDescending(s => s.LastUsedAt ?? s.CreatedAt);
     }
 
     private void SaveAndNotify()
