@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![.NET](https://img.shields.io/badge/.NET-10.0-512BD4.svg)](https://dotnet.microsoft.com/)
 [![Platform](https://img.shields.io/badge/platform-Windows%20x64-0078D6.svg)](#)
-[![Version](https://img.shields.io/badge/version-8.1-brightgreen.svg)](../../releases)
+[![Version](https://img.shields.io/badge/version-8.2-brightgreen.svg)](../../releases)
 
 ![MultiCopy 主界面（暗色主题）](docs/screenshots/origin.png)
 
@@ -92,7 +92,7 @@ MultiCopy 解决一个常见痛点：整理资料、填写表单、收集素材�
 
 ### 方式一：安装包（推荐普通用户）
 
-前往 [Releases](../../releases) 下载 `MultiCopySetup-8.1.exe`，双击安装即可。安装包支持中文界面、桌面快捷方式、开机自启选项。
+前往 [Releases](../../releases) 下载 `MultiCopySetup-8.2.exe`，双击安装即可。安装包支持中文界面、桌面快捷方式、开机自启选项。
 
 ### 方式二：绿色免安装
 
@@ -255,6 +255,19 @@ publish.ps1                    一键发布脚本（本地使用）
 - **拖拽导出**：OLE `DataObject` 提供 `UnicodeText / Text / HTML`；图片额外写入临时 PNG 并附带 `FileDrop`
 
 ## 更新日志
+
+### v8.2
+
+- **新增「收编剪贴板」**：软件未运行或监控关闭期间复制的内容不会自动入队（事件监听的天然盲区）——现在可以显式补收：
+  - 主窗口前台按 `Ctrl+V`，或点工具栏 / `⋯` 菜单 / 托盘菜单的「收编当前剪贴板」，把剪贴板当前内容送进与监听完全相同的采集管线（容量、去重、入队目标一致）
+  - 收编幂等：内容已在队列/置顶中时直接定位到已有条目，不产生重复
+  - 来源归属取剪贴板属主进程名；属主已退出时诚实标注「剪贴板遗留」
+  - `Shift+Ctrl+V` 作为逃生口：往搜索框粘贴过滤词
+- **修复：队列粘贴模式开启时，在 MultiCopy 前台按 `Ctrl+V` 会误消耗队首**——前台 `Ctrl+V` 语义改为收编（旧行为是在搜索框打字时按 Ctrl+V 会白白出队一条）
+- **修复图片悬停预览遮挡**：
+  - 悬停删除 / 置顶按钮不再触发预览（指针在按钮上=要操作，不是要偷看）
+  - 预览窗永远落在主窗口侧面的槽位（右→左取更宽者，槽宽不足按槽收缩图片），不再居中遮挡删除按钮与列表
+  - 预览垂直锚定到正在看的那一行；切换条目时跟随，大图不会再挤进主窗
 
 ### v8.1
 
