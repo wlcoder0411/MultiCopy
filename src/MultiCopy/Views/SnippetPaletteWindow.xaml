@@ -12,13 +12,15 @@
     <Border Margin="8" Background="{DynamicResource CardBackgroundBrush}"
             BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
             CornerRadius="10" Padding="10"
-            Cursor="SizeAll"
             MouseLeftButtonDown="Root_MouseLeftButtonDown">
         <StackPanel>
-            <!-- 拖动区：标题即窗口把手（列表占满时仍可稳定拖动） -->
+            <!-- 拖动区：标题即窗口把手（列表占满时仍可稳定拖动）。
+                 移动光标只标在把手区：根容器挂 SizeAll 会让列表项与提示区也显示移动光标，
+                 与"可交互"的视觉暗示冲突（实际空白处也能拖动，只是不诱导）。 -->
             <TextBlock Text="片段速取" HorizontalAlignment="Center" Margin="0,0,0,6"
                        FontSize="{StaticResource FontSizeCaption}"
                        Foreground="{DynamicResource ForegroundDimBrush}"
+                       Cursor="SizeAll"
                        ToolTip="按住标题或空白处拖动窗口" />
 
             <!-- 搜索框 -->

@@ -457,3 +457,7 @@ installer/
 *.local.json
 小红书宣传文案.md
 xiaohongshu-copy.html
+
+# ZCode 会话临时目录（不入库）
+.tmp-npm-cache/
+.zcode/
