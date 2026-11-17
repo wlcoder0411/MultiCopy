@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![.NET](https://img.shields.io/badge/.NET-10.0-512BD4.svg)](https://dotnet.microsoft.com/)
 [![Platform](https://img.shields.io/badge/platform-Windows%20x64-0078D6.svg)](#)
-[![Version](https://img.shields.io/badge/version-8.0-brightgreen.svg)](../../releases)
+[![Version](https://img.shields.io/badge/version-8.1-brightgreen.svg)](../../releases)
 
 ![MultiCopy 主界面（暗色主题）](docs/screenshots/origin.png)
 
@@ -92,7 +92,7 @@ MultiCopy 解决一个常见痛点：整理资料、填写表单、收集素材�
 
 ### 方式一：安装包（推荐普通用户）
 
-前往 [Releases](../../releases) 下载 `MultiCopySetup-8.0.exe`，双击安装即可。安装包支持中文界面、桌面快捷方式、开机自启选项。
+前往 [Releases](../../releases) 下载 `MultiCopySetup-8.1.exe`，双击安装即可。安装包支持中文界面、桌面快捷方式、开机自启选项。
 
 ### 方式二：绿色免安装
 
@@ -255,6 +255,17 @@ publish.ps1                    一键发布脚本（本地使用）
 - **拖拽导出**：OLE `DataObject` 提供 `UnicodeText / Text / HTML`；图片额外写入临时 PNG 并附带 `FileDrop`
 
 ## 更新日志
+
+### v8.1
+
+- **新增后台采集**：托盘 / `⋯` 菜单可收起窗口但保留剪贴板监控——截图不会把 MultiCopy 界面拍进去，适合「边截图边收集」；窗口再次显示即恢复默认的「隐藏即停采」，一次性动作、不落盘
+  - 有其他本程序窗口（设置 / 片段库 / 使用说明）挡着时拒绝进入并说明原因，避免它们被截进画面
+  - 托盘 tooltip 显示「后台采集中」前缀，并弹一次说明气泡，避免把「窗口消失」误判为程序退出
+- **修复图片粘贴「假成功」**：PNG 与 `CF_DIB` 两路写入全部失败时不再出队，条目保留待重试，不再出现「剪贴板被清空、目标粘出空白、条目丢失」
+- **修复 Ctrl+V 粘贴大图卡顿**：新增图片预编码缓存，把 O(W×H) 的 PNG / DIB 编码移出低级键盘钩子回调（4096² 图实测编码约 200ms，已超出系统 300ms 钩子预算）；钩子命中缓存只做写入，未命中仅同步编码 `CF_DIB` 并后台补全
+- **修复图片跨会话丢图**：条目 Id 随索引落盘并在加载时还原（旧数据从 PNG 文件名反推），启动时的孤儿清理不再误删上次会话的图片、进程被强杀后不再永久丢图
+- 持久化写盘延迟到键盘钩子返回后执行，避免全量序列化挤占钩子时间预算；持久化 Id 与图片文件名做合法性校验（拒绝路径穿越）
+- 修复片段速取窗移动光标提示范围过大：只标在标题把手区，列表项与提示区恢复正常光标
 
 ### v8.0
 
