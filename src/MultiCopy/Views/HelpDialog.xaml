@@ -43,7 +43,7 @@
                 <TextBlock Style="{StaticResource HelpText}">
                     <Run Style="{StaticResource KeyRun}" Text="Alt+Z" /><Run Text="　调出 / 隐藏 MultiCopy" /><LineBreak />
                     <Run Style="{StaticResource KeyRun}" Text="Alt+S" /><Run Text="　呼出片段速取框（输入即过滤，Enter 原样粘贴）" /><LineBreak />
-                    <Run Style="{StaticResource KeyRun}" Text="Ctrl+V" /><Run Text="　队列粘贴模式开启时，按序粘贴下一条" /><LineBreak />
+                    <Run Style="{StaticResource KeyRun}" Text="Ctrl+V" /><Run Text="　队列粘贴模式开启时，按序粘贴下一条；MultiCopy 窗口前台时＝收编剪贴板" /><LineBreak />
                     <Run Style="{StaticResource KeyRun}" Text="Ctrl+Shift+V / Shift+V" /><Run Text="　普通粘贴，不消耗队列" />
                 </TextBlock>
 
@@ -51,6 +51,7 @@
                 <TextBlock Style="{StaticResource HelpText}">
                     <Run Style="{StaticResource KeyRun}" Text="↑ / ↓" /><Run Text="　在列表中上下选择" /><LineBreak />
                     <Run Style="{StaticResource KeyRun}" Text="Enter" /><Run Text="　粘贴选中项" /><LineBreak />
+                    <Run Style="{StaticResource KeyRun}" Text="Ctrl+V" /><Run Text="　收编剪贴板内容到队列（软件未运行时复制的内容；Shift+Ctrl+V 为粘贴到搜索框）" /><LineBreak />
                     <Run Style="{StaticResource KeyRun}" Text="Space" /><Run Text="　预览选中的图像（原始尺寸大图，再按一次关闭）" /><LineBreak />
                     <Run Style="{StaticResource KeyRun}" Text="Del" /><Run Text="　删除选中项" /><LineBreak />
                     <Run Style="{StaticResource KeyRun}" Text="Ctrl+Z" /><Run Text="　撤销上一次粘贴 / 删除" /><LineBreak />
@@ -76,6 +77,7 @@
                     <Run Text="• 顶部标签栏可切换「全部 / 置顶 / 分组 / 文本 / 图像 / 链接」视图，末端「＋」新建分组。" /><LineBreak />
                     <Run Text="• 空格预览与悬停预览都支持：悬停无需键盘焦点；空格需窗口有键盘焦点。" /><LineBreak />
                     <Run Text="• 窗口隐藏到托盘时监控暂停、Ctrl+V 也随之暂停；需要「窗口不入镜但继续采集」时，用托盘或 ⋯ 菜单的「后台采集」，窗口再显示即恢复。" /><LineBreak />
+                    <Run Text="• 软件未运行期间复制的内容不会自动出现在列表：窗口前台按 Ctrl+V，或用工具栏 / ⋯ / 托盘的「收编当前剪贴板」补收。" /><LineBreak />
                     <Run Text="• Ctrl+Z 与方向键仅在窗口内生效；粘贴后可按 Alt+Z 回到窗口撤销。" /><LineBreak />
                     <Run Text="• 同一分组内相同文本会自动去重，不会重复入队。" /><LineBreak />
                     <Run Text="• 队列上限默认 30 条（可在设置中调整 5–200），顶部显示当前容量，满后请从 ⋯ 菜单清空或删除条目。" /><LineBreak />

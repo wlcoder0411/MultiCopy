@@ -414,6 +414,14 @@
                     <Path Style="{StaticResource IconStyle}" Data="{StaticResource IconUndo}"/>
                 </Button>
 
+                <!-- 收编：把剪贴板当前内容补进队列（软件未运行期间复制的；前台 Ctrl+V 手势的鼠标入口） -->
+                <Button x:Name="AdoptButton" Style="{StaticResource GhostButton}" Padding="5"
+                        Margin="2,0,0,0" VerticalAlignment="Center"
+                        ToolTip="收编剪贴板内容到队列（软件未运行时复制的内容；窗口前台按 Ctrl+V 同效）"
+                        Click="AdoptClipboard_Click">
+                    <Path Style="{StaticResource IconStyle}" Data="{StaticResource IconListPlus}"/>
+                </Button>
+
                 <!-- 片段库：常用语句速取（不占队列、不常驻列表） -->
                 <Button x:Name="SnippetButton" Style="{StaticResource GhostButton}" Padding="5"
                         Margin="2,0,0,0" VerticalAlignment="Center"
@@ -456,7 +464,7 @@
             </StackPanel>
             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
                 <!-- 监控开关（眼睛图标，开=睁眼，关=闭眼） -->
-                <ToggleButton Style="{StaticResource GhostToggleButton}" ToolTip="监控剪贴板开关"
+                <ToggleButton x:Name="MonitorToggle" Style="{StaticResource GhostToggleButton}" ToolTip="监控剪贴板开关"
                               Margin="0,0,4,0"
                               IsChecked="{Binding IsMonitoring, Mode=TwoWay}">
                     <Grid Width="16" Height="16">
@@ -485,6 +493,9 @@
                             <MenuItem Header="后台采集（收起窗口继续采集）"
                                       ToolTip="收起窗口但保持监控：截图不会拍到界面，边截图边收集。再次显示窗口即恢复"
                                       Click="BackgroundCapture_Click" />
+                            <MenuItem Header="收编当前剪贴板 (Ctrl+V)"
+                                      ToolTip="把剪贴板中的最新内容加入队列：软件未运行时复制、源内容已无法重新复制的情况由此补收"
+                                      Click="AdoptClipboard_Click" />
                             <Separator />
                             <MenuItem Header="清空普通队列" Command="{Binding ClearNormalCommand}" />
                             <MenuItem Header="切换为亮色主题" Command="{Binding ToggleThemeCommand}"
@@ -497,7 +508,7 @@
                         </ContextMenu>
                     </Button.ContextMenu>
                 </Button>
-                <ToggleButton Style="{StaticResource PillButton}"
+                <ToggleButton x:Name="ModeToggle" Style="{StaticResource PillButton}"
                               IsChecked="{Binding ModeOn, Mode=TwoWay}"
                               Content="{Binding ModeOn, Converter={x:Static infra:ModeLabelConverter.Instance}, Mode=OneWay}" />
             </StackPanel>

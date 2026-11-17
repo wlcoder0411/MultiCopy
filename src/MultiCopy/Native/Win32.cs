@@ -75,6 +75,10 @@ internal static class Win32
     [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
     internal static extern uint RegisterClipboardFormat(string lpszFormatName);
 
+    /// <summary>最近一次写入剪贴板的窗口（收编时用于归属来源应用；窗口已销毁则返回 0）。</summary>
+    [DllImport("user32.dll", SetLastError = true)]
+    internal static extern IntPtr GetClipboardOwner();
+
     // ---------- 全局内存 ----------
     [DllImport("kernel32.dll", SetLastError = true)]
     internal static extern IntPtr GlobalAlloc(uint uFlags, IntPtr dwBytes);

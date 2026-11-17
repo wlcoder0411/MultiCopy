@@ -8,6 +8,7 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using Hardcodet.Wpf.TaskbarNotification;
 using MultiCopy.Infrastructure;using MultiCopy.Models;
 using MultiCopy.Native;
 using MultiCopy.Services;
@@ -135,6 +136,17 @@ public partial class MainWindow : Window
         }
 
         bool ctrl = (Keyboard.Modifiers & ModifierKeys.Control) != 0;
+        bool shift = (Keyboard.Modifiers & ModifierKeys.Shift) != 0;
+
+        // Ctrl+Shift+V：收编手势的逃生口（全局钩子对 Shift 组合放行）。TextBox 的
+        // 粘贴命令手势只认 Ctrl+V，Shift 组合不会被系统当成粘贴——这里显式执行
+        // Paste，让「往搜索框粘贴过滤词」真正可用（与帮助文档承诺一致）。
+        if (e.Key == Key.V && ctrl && shift && SearchBox.IsKeyboardFocusWithin)
+        {
+            SearchBox.Paste();
+            e.Handled = true;
+            return;
+        }
 
         // 上下方向键：驱动列表选择。保持搜索框焦点，保证继续输入筛选不中断。
         if (e.Key == Key.Down || e.Key == Key.Up)
@@ -512,6 +524,73 @@ public partial class MainWindow : Window
             if (!EnterBackgroundCapture())
                 BackgroundCaptureDeclined?.Invoke(this, EventArgs.Empty);
         }), System.Windows.Threading.DispatcherPriority.Background);
+
+    // ---------- 收编剪贴板 ----------
+
+    /// <summary>⋯ 菜单 / 工具栏按钮入口（托盘菜单与前台 Ctrl+V 手势也汇入同一编排）。</summary>
+    private void AdoptClipboard_Click(object sender, RoutedEventArgs e)
+        => AdoptClipboardFromUser();
+
+    /// <summary>
+    /// 收编当前剪贴板内容到队列。四入口（工具栏 / ⋯ 菜单 / 托盘菜单 / 主窗前台 Ctrl+V）
+    /// 汇合于此，采集本身在 <see cref="ClipboardListenerService.AdoptCurrentClipboard"/>
+    /// 与监听路径共用同一管线（容量、去重、指纹、入队目标）。
+    ///
+    /// 反馈策略：窗口可见 → 定位并高亮新条目（或已存在的相同条目）；
+    /// 窗口隐藏 → 托盘气泡告知结果；空剪贴板 / 图片过大 → 节流气泡说明原因；
+    /// 队列已满 → 管线内已弹过气泡，不重复提示。
+    /// </summary>
+    public void AdoptClipboardFromUser()
+    {
+        if (_vm == null) return;
+        var app = Application.Current as App;
+        var listener = app?.Listener;
+        if (listener == null) return;
+
+        var outcome = listener.AdoptCurrentClipboard();
+        switch (outcome.Status)
+        {
+            case CaptureStatus.Captured:
+            case CaptureStatus.AlreadyInQueue:
+                if (IsVisible && outcome.Item != null)
+                {
+                    _vm.RevealItem(outcome.Item);
+                    if (_vm.SelectedEntry != null)
+                        ResultsList.ScrollIntoView(_vm.SelectedEntry);
+                }
+                else if (!IsVisible)
+                {
+                    string msg = outcome.Status == CaptureStatus.AlreadyInQueue
+                        ? "剪贴板内容已在队列中"
+                        : "已收编剪贴板内容到队列";
+                    app!.Tray?.ShowTip(msg, BalloonIcon.Info);
+                }
+                break;
+
+            case CaptureStatus.Empty:
+                ShowAdoptTipThrottled("剪贴板为空，没有可收编的内容", BalloonIcon.Info);
+                break;
+
+            case CaptureStatus.TooLarge:
+                ShowAdoptTipThrottled("图片超过 4096×4096 上限，未收编", BalloonIcon.Warning);
+                break;
+
+            case CaptureStatus.QueueFull:
+            case CaptureStatus.Suppressed:
+                break; // 「队列已满」气泡管线内已弹；去重抑制属正常行为，不打扰
+        }
+    }
+
+    /// <summary>收编气泡的 5 秒节流：按住 Ctrl+V 自动重复触发时不刷屏。</summary>
+    private long _lastAdoptTipTicks;
+
+    private void ShowAdoptTipThrottled(string text, BalloonIcon icon)
+    {
+        long now = Environment.TickCount64;
+        if (now - _lastAdoptTipTicks < 5000) return;
+        _lastAdoptTipTicks = now;
+        (Application.Current as App)?.Tray?.ShowTip(text, icon);
+    }
 
     /// <summary>
     /// 重新断言窗口置顶。

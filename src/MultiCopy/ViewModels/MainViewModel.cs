@@ -127,7 +127,8 @@ public sealed partial class MainViewModel : ObservableObject
     public string FeatureHint { get; } =
         "• Alt+S 片段速取 · 悬停图片预览 · 单击粘贴 / 双击置顶保留\n" +
         "• 截图时界面不想入镜：托盘「后台采集」收起窗口但继续采集\n" +
-        "• 队列粘贴开启后 Ctrl+V 按序出队\n" +
+        "• 队列粘贴开启后 Ctrl+V 按序出队；MC 前台时 Ctrl+V 收编剪贴板\n" +
+        "• 软件未运行时的复制：前台 Ctrl+V 或点工具栏收编按钮进队列\n" +
         "• 右键条目：置顶 / 移动到分组 / 按行拆分 / 存入片段库\n" +
         "• 点击分组标签 = 新复制归入该组 · 拖动标签排序 · 右键管理\n" +
         "• 拖动条目导出 · Del 删除 · Esc 清空搜索 / 隐藏窗口";
@@ -424,7 +425,7 @@ public sealed partial class MainViewModel : ObservableObject
         ClipboardTabKind.TypeText => ("暂无文本内容", "复制文本后会出现在这里"),
         ClipboardTabKind.TypeImage => ("暂无图像内容", "复制或截图后会出现在这里；选中后按空格可预览大图"),
         ClipboardTabKind.TypeLink => ("暂无链接内容", "复制 http(s) 链接后会出现在这里"),
-        _ => ("暂无复制内容", "在任意应用按 Ctrl+C 即可收集到这里"),
+        _ => ("暂无复制内容", "在任意应用按 Ctrl+C 收集；软件未运行时复制的内容，按 Ctrl+V 或点顶部收编按钮"),
     };
 
     private static List<ClipboardItem> FilterItems(IEnumerable<ClipboardItem> source, string? keyword)
@@ -509,6 +510,39 @@ public sealed partial class MainViewModel : ObservableObject
     /// <summary>选中指定条目对应的行（撤销恢复后使用）。</summary>
     private void SelectItem(ClipboardItem item)
     {
+        var row = Rows.OfType<ClipboardItemRow>().FirstOrDefault(r => ReferenceEquals(r.Item, item));
+        if (row != null) SelectedEntry = row;
+    }
+
+    /// <summary>
+    /// 收编后的定位：让指定条目可见并选中（配合视图 ScrollIntoView 完成反馈）。
+    /// 当前标签看不到它时切到对应的类型筛选标签——这类标签是纯查看筛选、跨集合显示，
+    /// <see cref="SelectTab"/> 对它们不改变活动分组，避免为「看一眼」劫持用户的采集目标。
+    /// 搜索中的先清空关键字，保证条目不被关键字过滤掉。
+    /// </summary>
+    public void RevealItem(ClipboardItem item)
+    {
+        if (IsSearching) SearchText = null; // 触发 RefreshAll
+
+        var kind = SelectedTab?.Kind ?? ClipboardTabKind.All;
+        bool visible = kind switch
+        {
+            ClipboardTabKind.All => true,
+            ClipboardTabKind.Pinned => item.IsPinned,
+            ClipboardTabKind.Group => SelectedTab?.Group?.Items.Contains(item) == true,
+            _ => MatchesTabKind(kind, item),
+        };
+        if (!visible)
+        {
+            var tab = item switch
+            {
+                ImageClipboardItem => Tabs.FirstOrDefault(t => t.Kind == ClipboardTabKind.TypeImage),
+                TextClipboardItem { IsLink: true } => Tabs.FirstOrDefault(t => t.Kind == ClipboardTabKind.TypeLink),
+                _ => Tabs.FirstOrDefault(t => t.Kind == ClipboardTabKind.TypeText),
+            };
+            if (tab != null && !ReferenceEquals(tab, SelectedTab)) SelectTab(tab);
+        }
+
         var row = Rows.OfType<ClipboardItemRow>().FirstOrDefault(r => ReferenceEquals(r.Item, item));
         if (row != null) SelectedEntry = row;
     }

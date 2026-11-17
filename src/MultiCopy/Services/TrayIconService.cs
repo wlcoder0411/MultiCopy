@@ -84,6 +84,16 @@ public sealed class TrayIconService : IDisposable
         miSnippet.Click += (_, _) => _window.OpenSnippetPalette();
         menu.Items.Add(miSnippet);
 
+        // 收编当前剪贴板：MC 未运行 / 监控关闭期间复制的内容不会进队列（事件盲区），
+        // 这里显式补收。主窗口前台时按 Ctrl+V 同效。
+        var miAdopt = new MenuItem
+        {
+            Header = "收编当前剪贴板(_V)",
+            ToolTip = "把剪贴板中的最新内容加入队列：软件未运行时复制、源内容已无法重新复制的情况由此补收",
+        };
+        miAdopt.Click += (_, _) => _window.AdoptClipboardFromUser();
+        menu.Items.Add(miAdopt);
+
         // 后台采集：收起窗口但保留监控，供"边截图边收集、界面不入镜"使用。
         // 一次性动作（不带勾选态）：窗口再次显示即恢复默认的"隐藏即停采"。
         var miBackgroundCapture = new MenuItem
@@ -318,6 +328,10 @@ public sealed class TrayIconService : IDisposable
     /// <summary>显示气泡提示（标题 + 正文 + 图标）。</summary>
     private void ShowBalloon(string title, string text, BalloonIcon icon)
         => _tray?.ShowBalloonTip(title, text, icon);
+
+    /// <summary>通用信息气泡入口（收编反馈等），供窗口层直接调用。</summary>
+    public void ShowTip(string text, BalloonIcon icon)
+        => ShowBalloon("MultiCopy", text, icon);
 
     /// <summary>读取当前是否已存在开机自启项；并把旧格式值（缺 --minimized）补全为新格式。</summary>
     private static bool ReadAutoStart()

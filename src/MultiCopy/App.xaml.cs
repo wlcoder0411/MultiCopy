@@ -119,6 +119,8 @@ public partial class App : Application
                 () => window.OpenSnippetPalette(),
                 System.Windows.Threading.DispatcherPriority.Background);
         Tray = new TrayIconService(window, Queue, HotkeyService);
+        // 主窗前台 Ctrl+V = 收编剪贴板（键盘手势入口），与 ⋯ / 托盘 / 工具栏入口汇入同一编排
+        KeyboardHook.AdoptRequested += (_, _) => window.AdoptClipboardFromUser();
         // 进入后台采集后给一次说明气泡：窗口消失容易被误判为程序退出
         window.BackgroundCaptureEntered += (_, _) => Tray?.ShowBackgroundCaptureTip();
         // 被其他窗口挡住时也要说明原因，否则菜单点击看起来像"没反应"
@@ -340,7 +342,7 @@ public partial class App : Application
     public void StartBackendServices(IntPtr hwnd)
     {
         Listener?.Start(hwnd);
-        KeyboardHook?.Start();
+        KeyboardHook?.Start(hwnd); // 主窗句柄：前台 Ctrl+V 的收编手势判定用
         Tray?.Start();
         HotkeyService?.Start(hwnd);
     }

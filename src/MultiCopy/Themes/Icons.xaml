@@ -41,4 +41,7 @@
     <!-- 片段库（书签） -->
     <Geometry x:Key="IconBookmark">M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z</Geometry>
 
+    <!-- 收编（队列线+加入号，Lucide list-plus：把剪贴板当前内容编入队列） -->
+    <Geometry x:Key="IconListPlus">M16 5H3M11 12H3M16 19H3M18 9v6M21 12h-6</Geometry>
+
 </ResourceDictionary>

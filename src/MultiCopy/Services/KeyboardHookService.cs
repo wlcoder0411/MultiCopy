@@ -18,7 +18,14 @@ public sealed class KeyboardHookService : IDisposable
     private readonly ImageEncodeCache _imageCache;
     private readonly AppState _state = AppState.Instance;
     private IntPtr _hook = IntPtr.Zero;
+    private IntPtr _mcHwnd; // 主窗口句柄：MC 前台时 Ctrl+V 语义切换为「收编」
     private LowLevelKeyboardProc? _proc; // 必须保持委托引用，防止 GC 回收导致钩子失效
+
+    /// <summary>
+    /// 主窗口前台时按下 Ctrl+V（无 Shift）触发。钩子回调内只吞键不干活，
+    /// 实际收编由订阅方（App → MainWindow.AdoptClipboardFromUser）在 UI 线程执行。
+    /// </summary>
+    internal event EventHandler? AdoptRequested;
 
     internal KeyboardHookService(ClipboardQueue queue, ClipboardService clipboard, ImageEncodeCache imageCache)
     {
@@ -27,8 +34,9 @@ public sealed class KeyboardHookService : IDisposable
         _imageCache = imageCache;
     }
 
-    public void Start()
+    public void Start(IntPtr hwnd)
     {
+        _mcHwnd = hwnd;
         if (_hook != IntPtr.Zero) return;
         _proc = HookCallback;
         IntPtr hMod = Win32.GetModuleHandle(null);
@@ -55,6 +63,24 @@ public sealed class KeyboardHookService : IDisposable
             if (_state.IsSimulatingPaste)
             {
                 return Win32.CallNextHookEx(_hook, nCode, wParam, lParam);
+            }
+
+            // MC 自己是前台：Ctrl+V 不出队（修掉在搜索框打字时按 Ctrl+V 误消耗队首的暗坑），
+            // 语义改为「收编剪贴板当前内容」，与 ⋯ / 托盘 / 工具栏入口汇入同一管线。
+            // 与队列粘贴模式、监控开关无关：用户在本窗口按键是显式意图。
+            // 回调内只做一次前台比较，收编动作 BeginInvoke 到钩子返回后执行（不占超时预算）；
+            // 返回 1 吞掉按键，避免搜索框再收到一次普通粘贴。
+            // Shift+Ctrl+V 不进此分支：保持普通粘贴（往搜索框粘贴过滤词）。
+            if (vk == Constants.VK_V && ctrl && !shift)
+            {
+                IntPtr fg = Win32.GetForegroundWindow();
+                if (fg != IntPtr.Zero && fg == _mcHwnd)
+                {
+                    System.Windows.Threading.Dispatcher.CurrentDispatcher.BeginInvoke(
+                        () => AdoptRequested?.Invoke(this, EventArgs.Empty),
+                        System.Windows.Threading.DispatcherPriority.Send);
+                    return (IntPtr)1;
+                }
             }
 
             if (vk == Constants.VK_V && ctrl && _state.ModeOn && _state.IsMonitoring && !shift)
