@@ -30,25 +30,35 @@ public partial class ImagePreviewWindow : Window
     /// <summary>悬停预览模式下鼠标离开预览窗（主窗口据此延迟关闭，允许在图片行与预览窗之间移动）。</summary>
     public event EventHandler? HoverExited;
 
+    /// <summary>当前预览的条目（尺寸适配要用图片宽高比，SetItem 存下供 PlaceNear 使用）。</summary>
+    private ImageClipboardItem? _currentItem;
+
     protected override void OnMouseLeave(MouseEventArgs e)
     {
         base.OnMouseLeave(e);
         if (IsHoverPreview) HoverExited?.Invoke(this, EventArgs.Empty);
     }
 
-    /// <summary>设置预览内容并按图片尺寸适配窗口。</summary>
+    /// <summary>设置预览内容（尺寸与位置由紧随其后的 PlaceNear 统一计算）。</summary>
     public void SetItem(ImageClipboardItem item)
     {
+        _currentItem = item;
         PreviewImage.Source = item.Image;
         InfoText.Text = BuildInfo(item);
-        FitToImage(item);
     }
 
     /// <summary>
-    /// 贴靠主窗口放置：右侧 → 左侧 → 主窗口上方，尽量不覆盖主窗口。
-    /// 覆盖主窗口会让指针落进预览窗，造成"悬停打开又立刻关闭"的抖动（窄图/贴边时尤其明显）。
+    /// 贴靠主窗口放置并按图片适配尺寸。不变量：**预览窗绝不覆盖主窗口**——
+    /// 覆盖主窗会让指针落进预览窗（悬停打开又立刻关闭的抖动），更会遮住删除/置顶
+    /// 按钮（正是要修的缺陷）。做法：主窗两侧各有一个槽位，取更宽的一侧放置；
+    /// 槽宽不足以放下按 70% 虚拟屏适配的图时，按槽宽收缩预览（Stretch=Uniform 等比）。
+    /// 垂直锚定 anchorTop（悬停=指针处，贴着正在看的那一行；空格=null 落主窗顶部）。
+    ///
+    /// 极端兜底：两侧槽都放不下最小宽度（主窗几乎占满屏幕）时，夹回虚拟屏内
+    /// 允许与主窗边缘重叠——此时任何摆放都会重叠，这是唯一不越界的选择。
+    /// 多显示器下 VirtualScreen 跨屏的局限与旧实现相同，未处理。
     /// </summary>
-    public void PlaceNear(Window owner)
+    public void PlaceNear(Window owner, double? anchorTop = null)
     {
         double virtualLeft = SystemParameters.VirtualScreenLeft;
         double virtualTop = SystemParameters.VirtualScreenTop;
@@ -56,34 +66,38 @@ public partial class ImagePreviewWindow : Window
         double virtualBottom = virtualTop + SystemParameters.VirtualScreenHeight;
         const double gap = 12;
 
-        double left = owner.Left + owner.Width + gap;
-        if (left + Width > virtualRight)
-            left = owner.Left - Width - gap;
+        // 槽位：主窗右侧 / 左侧与虚拟屏边缘之间的空间，取更宽的一侧
+        double rightSlotW = virtualRight - (owner.Left + owner.ActualWidth + gap);
+        double leftSlotW = (owner.Left - gap) - virtualLeft;
+        bool useRight = rightSlotW >= leftSlotW;
+        double slotWidth = Math.Max(rightSlotW, leftSlotW);
 
-        double top = Math.Clamp(owner.Top, virtualTop,
-            Math.Max(virtualTop, virtualBottom - Height - 8));
+        if (_currentItem != null) FitToImage(_currentItem, slotWidth);
 
-        if (left < virtualLeft)
-        {
-            // 左右都放不下（贴边/窄屏）：放到主窗口上方；上方也放不下才水平居中
-            left = Math.Clamp(owner.Left, virtualLeft,
-                Math.Max(virtualLeft, virtualRight - Width - 8));
-            double above = owner.Top - Height - gap;
-            top = above >= virtualTop
-                ? above
-                : Math.Clamp(owner.Top, virtualTop, Math.Max(virtualTop, virtualBottom - Height - 8));
-        }
+        double left = useRight
+            ? owner.Left + owner.ActualWidth + gap
+            : owner.Left - Width - gap;
+        // 槽宽缩到最小仍放不下（罕见）：夹回虚拟屏内，不越界即可
+        left = Math.Clamp(left, virtualLeft + 4, Math.Max(virtualLeft + 4, virtualRight - Width - 4));
+
+        // 垂直：锚点与预览中线对齐（贴着正在看的内容），夹在虚拟屏内
+        double anchor = anchorTop ?? owner.Top;
+        double top = Math.Clamp(anchor - Height / 2,
+            virtualTop + 4, Math.Max(virtualTop + 4, virtualBottom - Height - 4));
 
         Left = left;
         Top = top;
     }
 
-    /// <summary>按图片像素尺寸（≈96dpi 下的 DIP）适配窗口：不放大，仅缩小到虚拟屏约束内。</summary>
-    private void FitToImage(ImageClipboardItem item)
+    /// <summary>
+    /// 按图片像素尺寸（≈96dpi 下的 DIP）适配窗口：不放大，仅缩小。
+    /// 槽宽是硬约束（保证不覆盖主窗），虚拟屏 70% 是上限。
+    /// </summary>
+    private void FitToImage(ImageClipboardItem item, double slotWidth)
     {
         const double chromeW = 26; // 左右 Margin 24 + 边框 2
         const double chromeH = 66; // 标题行 + 信息行 + 边框
-        double maxW = SystemParameters.VirtualScreenWidth * 0.7;
+        double maxW = Math.Max(MinWidth - chromeW, Math.Min(slotWidth - chromeW, SystemParameters.VirtualScreenWidth * 0.7));
         double maxH = SystemParameters.VirtualScreenHeight * 0.7;
 
         double scale = Math.Min(1.0,

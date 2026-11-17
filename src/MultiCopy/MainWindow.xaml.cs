@@ -1046,15 +1046,17 @@ public partial class MainWindow : Window
     /// <summary>
     /// 打开或更新预览窗。openedByHover=true 时预览跟随鼠标（移开图片行即关）；
     /// false 时空格/Esc 关闭，选择变化时跟随切换。
+    /// anchorTop：垂直锚点（悬停=指针处，让预览贴着正在看的那一行；空格=null 落主窗顶部）。
+    /// 每次都重新按槽位放置：图片尺寸随内容变化，变大的图不能挤进主窗口覆盖按钮。
     /// </summary>
-    private void OpenPreview(ImageClipboardItem item, bool openedByHover)
+    private void OpenPreview(ImageClipboardItem item, bool openedByHover, double? anchorTop = null)
     {
         _previewOpenedByHover = openedByHover;
         if (_imagePreview == null)
         {
             _imagePreview = new ImagePreviewWindow { IsHoverPreview = openedByHover };
             _imagePreview.SetItem(item);
-            _imagePreview.PlaceNear(this);
+            _imagePreview.PlaceNear(this, anchorTop);
             // 悬停模式：鼠标移入预览窗可细看；离开预览窗且不在图片行上时延迟关闭
             _imagePreview.HoverExited += (_, _) => ScheduleHoverPreviewClose();
             _imagePreview.Closed += (_, _) => _imagePreview = null;
@@ -1064,6 +1066,26 @@ public partial class MainWindow : Window
         {
             _imagePreview.IsHoverPreview = openedByHover;
             _imagePreview.SetItem(item);
+            _imagePreview.PlaceNear(this, anchorTop);
+        }
+    }
+
+    /// <summary>
+    /// 鼠标当前所在的屏幕 Y 坐标（DIP），作预览窗垂直锚点。
+    /// PointToScreen 返回物理像素，进程为 PerMonitorV2，必须经 TransformFromDevice 转回 DIP。
+    /// </summary>
+    private double? GetMouseScreenTop()
+    {
+        try
+        {
+            var source = PresentationSource.FromVisual(this);
+            if (source?.CompositionTarget == null) return null;
+            var dip = source.CompositionTarget.TransformFromDevice.Transform(PointToScreen(Mouse.GetPosition(this)));
+            return dip.Y;
+        }
+        catch
+        {
+            return null;
         }
     }
 
@@ -1142,13 +1164,18 @@ public partial class MainWindow : Window
         _hoverItem = img;
         if (_imagePreview != null)
         {
-            OpenPreview(img, openedByHover: true); // 预览已开：立即切换内容
+            OpenPreview(img, openedByHover: true, anchorTop: GetMouseScreenTop()); // 预览已开：立即切换内容
             return;
         }
         StartHoverTimer();
     }
 
-    /// <summary>命中测试：指针下的元素向上找到内容行，仅图片行返回有效项。</summary>
+    /// <summary>
+    /// 命中测试：指针下的元素向上找到内容行，仅图片行返回有效项。
+    /// 行内交互控件（删除/置顶按钮等）不算预览目标：指针落在按钮上是"要操作"，
+    /// 不是"要偷看"——若照样触发预览，预览窗会与按钮争抢指针（遮挡删除按钮
+    /// 导致点不到，是本修复的根因之一）。
+    /// </summary>
     private ImageClipboardItem? HitTestImageRow(Point p)
     {
         if (p.X < 0 || p.Y < 0 || p.X > ResultsList.ActualWidth || p.Y > ResultsList.ActualHeight)
@@ -1157,6 +1184,7 @@ public partial class MainWindow : Window
         var hit = ResultsList.InputHitTest(p) as DependencyObject;
         while (hit != null)
         {
+            if (hit is ButtonBase) return null;
             if (hit is FrameworkElement fe && fe.DataContext is ClipboardItemRow row)
                 return row.Item as ImageClipboardItem;
             hit = VisualTreeHelper.GetParent(hit);
@@ -1189,7 +1217,7 @@ public partial class MainWindow : Window
             // 停留期间列表可能已重建 / 指针已移走：以当前命中结果为准，不依赖旧容器
             if (!ResultsList.IsMouseOver
                 || !ReferenceEquals(HitTestImageRow(Mouse.GetPosition(ResultsList)), img)) return;
-            OpenPreview(img, openedByHover: true);
+            OpenPreview(img, openedByHover: true, anchorTop: GetMouseScreenTop());
         };
         return timer;
     }
