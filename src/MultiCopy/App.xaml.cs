@@ -31,6 +31,9 @@ public partial class App : Application
     public PasteExecutor? PasteExecutor { get; private set; }
     public SnippetLibrary? Snippets { get; private set; }
 
+    /// <summary>图片预编码缓存：让 Ctrl+V 钩子路径只做 memcpy，不在回调里编码大图。</summary>
+    internal ImageEncodeCache? ImageCache { get; private set; }
+
     public bool ForceExit { get; set; }
 
     /// <summary>上次保存时置顶项的指纹，用于跳过未变化的冗余写盘。</summary>
@@ -65,15 +68,22 @@ public partial class App : Application
         // 统一清理孤儿图片：联合 PinnedItems + Groups 中的图片引用，避免互相误删
         CleanupOrphanImagesUnified();
         ClipboardSvc = new ClipboardService();
+        // 图片预编码缓存：图片编码是 O(W×H) 的重活，必须移出低级键盘钩子回调
+        ImageCache = new ImageEncodeCache();
         Listener = new ClipboardListenerService(Queue, ClipboardSvc);
-        KeyboardHook = new KeyboardHookService(Queue, ClipboardSvc);
-        PasteExecutor = new PasteExecutor(ClipboardSvc);
+        KeyboardHook = new KeyboardHookService(Queue, ClipboardSvc, ImageCache);
+        PasteExecutor = new PasteExecutor(ClipboardSvc, ImageCache);
         Snippets = new SnippetLibrary(SnippetStorageService.Load());
         ViewModel = new MainViewModel(Queue, PasteExecutor, Snippets);
 
 
-        // 置顶项/分组变化时即时持久化（防丢失，OnExit 兜底）
+        // 置顶项/分组变化后排队写盘（合并连续变化；OnExit 兜底）
         Queue.Changed += OnQueueChangedForPersistence;
+        // 队首变化时预热图片编码缓存（Ctrl+V 只会消耗队首）
+        Queue.Changed += OnQueueChangedForImagePrefetch;
+        AppState.Instance.ModeChanged += OnModeChangedForImagePrefetch;
+        // 切换活动分组只改出队范围、不触发 Queue.Changed，但队首会变，同样需要预热
+        AppState.Instance.ActiveGroupChanged += OnActiveGroupChangedForImagePrefetch;
 
         // 加载用户设置（全局快捷键等）
         var settings = SettingsStorageService.Load();
@@ -109,6 +119,10 @@ public partial class App : Application
                 () => window.OpenSnippetPalette(),
                 System.Windows.Threading.DispatcherPriority.Background);
         Tray = new TrayIconService(window, Queue, HotkeyService);
+        // 进入后台采集后给一次说明气泡：窗口消失容易被误判为程序退出
+        window.BackgroundCaptureEntered += (_, _) => Tray?.ShowBackgroundCaptureTip();
+        // 被其他窗口挡住时也要说明原因，否则菜单点击看起来像"没反应"
+        window.BackgroundCaptureDeclined += (_, _) => Tray?.ShowBackgroundCaptureBlockedTip();
         // 开机自启带 --minimized 参数：仅驻留托盘，不显示主窗口
         bool minimized = e.Args.Contains("--minimized", StringComparer.OrdinalIgnoreCase);
         if (minimized)
@@ -122,9 +136,20 @@ public partial class App : Application
         }
     }
 
+    /// <summary>是否有一次延迟写盘在排队（合并连续变化，避免钩子回调内重复排队）。</summary>
+    private bool _persistScheduled;
+
+    /// <summary>置顶项 / 分组列表是否有未落盘的变更。</summary>
+    private bool _pinnedDirty;
+    private bool _groupsDirty;
+
     /// <summary>
     /// 队列变化时，按需保存置顶项和分组列表（指纹比对跳过冗余写盘）。
     /// 置顶项与分组各自独立指纹：只有真正变化的子集写盘，避免普通队列操作引发连锁 IO。
+    /// 指纹计算（纯内存）在此同步完成；**实际写盘延迟到当前消息处理之后**——
+    /// 因为 Queue.Changed 会在 WH_KEYBOARD_LL 回调内同步触发（Ctrl+V 出队），
+    /// 而 groups.json 是全量序列化 + 原子替换，条目多时可达数十毫秒，留在回调里会挤占
+    /// LowLevelHooksTimeout 预算。延迟执行时读取的是当时最新状态，连续变化自动合并为一次写入。
     /// </summary>
     private void OnQueueChangedForPersistence(object? sender, EventArgs e)
     {
@@ -136,7 +161,7 @@ public partial class App : Application
         if (pinnedFp != _lastPinnedFingerprint)
         {
             _lastPinnedFingerprint = pinnedFp;
-            PinnedStorageService.Save(pinned);
+            _pinnedDirty = true;
         }
 
         // 分组列表（含组内项、置顶标识等）
@@ -145,9 +170,80 @@ public partial class App : Application
         if (groupsFp != _lastGroupsFingerprint)
         {
             _lastGroupsFingerprint = groupsFp;
-            GroupStorageService.Save(groups);
+            _groupsDirty = true;
+        }
+
+        if (_pinnedDirty || _groupsDirty) SchedulePersist();
+    }
+
+    /// <summary>把写盘排到当前消息处理之后（Background 优先级），多次变化只排队一次。</summary>
+    private void SchedulePersist()
+    {
+        if (_persistScheduled) return;
+        if (Dispatcher.HasShutdownStarted)
+        {
+            PersistPendingNow(); // 正在退出，直接写，避免丢改动
+            return;
+        }
+        _persistScheduled = true;
+        try
+        {
+            Dispatcher.BeginInvoke(() =>
+            {
+                _persistScheduled = false;
+                PersistPendingNow();
+            }, System.Windows.Threading.DispatcherPriority.Background);
+        }
+        catch (Exception ex)
+        {
+            // 关闭竞态下 BeginInvoke 可能被拒：复位标志并改为同步写，
+            // 否则脏标记会永久滞留（指纹已前移，后续变化不再被判脏）。
+            _persistScheduled = false;
+            PersistPendingNow();
+            System.Diagnostics.Debug.WriteLine($"[Persist] 排程失败，改为同步写盘: {ex.Message}");
         }
     }
+
+    /// <summary>仅写回标记为脏的子集（与指纹机制保持"只写变化部分"的语义）。</summary>
+    private void PersistPendingNow()
+    {
+        if (Queue == null) return;
+        if (_pinnedDirty)
+        {
+            _pinnedDirty = false;
+            PinnedStorageService.Save(Queue.PinnedItems);
+        }
+        if (_groupsDirty)
+        {
+            _groupsDirty = false;
+            GroupStorageService.Save(Queue.Groups);
+        }
+    }
+
+    /// <summary>
+    /// 为队首图片预热编码缓存。Ctrl+V 只会消耗队首，因此只需保证队首就绪；
+    /// 缓存层自己做条目数与字节上限淘汰，这里可以无脑调用。
+    /// 仅在队列粘贴模式开启时预热：其余模式不经过钩子写图片，预编码纯属浪费 CPU/内存。
+    /// </summary>
+    private void PrefetchHeadImage()
+    {
+        if (Queue == null || ImageCache == null) return;
+        if (!AppState.Instance.ModeOn) return;
+        if (Queue.Peek(AppState.Instance.ActiveGroupId) is ImageClipboardItem img)
+            ImageCache.Prefetch(img);
+    }
+
+    private void OnQueueChangedForImagePrefetch(object? sender, EventArgs e) => PrefetchHeadImage();
+
+    /// <summary>模式刚打开时队首可能已是图片：立即补一次预热。</summary>
+    private void OnModeChangedForImagePrefetch(object? sender, bool modeOn)
+    {
+        if (modeOn) PrefetchHeadImage();
+    }
+
+    /// <summary>活动分组变化后出队范围变了，队首可能换成另一张图片。</summary>
+    private void OnActiveGroupChangedForImagePrefetch(object? sender, string? groupId)
+        => PrefetchHeadImage();
 
     /// <summary>
     /// 构建置顶项轻量指纹：Count + 各项按类型计算的签名 + CreatedAt.Ticks。
@@ -257,7 +353,10 @@ public partial class App : Application
             PinnedStorageService.Save(Queue.PinnedItems);
             GroupStorageService.Save(Queue.Groups);
             Queue.Changed -= OnQueueChangedForPersistence;
+            Queue.Changed -= OnQueueChangedForImagePrefetch;
         }
+        AppState.Instance.ModeChanged -= OnModeChangedForImagePrefetch;
+        AppState.Instance.ActiveGroupChanged -= OnActiveGroupChangedForImagePrefetch;
         Listener?.Stop();
         KeyboardHook?.Dispose();
         Tray?.Dispose();

@@ -53,6 +53,7 @@ public sealed class AppState
 
     private volatile bool _modeOn;
     private volatile bool _isMonitoring = true; // 默认开启监控
+    private bool _keepMonitoringWhileHidden;    // "后台采集"一次性例外（不持久化）
     private string? _activeGroupId;
     private int _maxQueueItems = DefaultMaxQueueItems; // 普通队列容量上限
     private string _pastePrefix = string.Empty; // 粘贴前缀内容（空=无前缀）
@@ -89,6 +90,27 @@ public sealed class AppState
             if (_isMonitoring == value) return;
             _isMonitoring = value;
             MonitoringChanged?.Invoke(this, value);
+        }
+    }
+
+    /// <summary>
+    /// 隐藏窗口时是否保留监控（"后台采集"一次性动作置位）。
+    ///
+    /// 背景：窗口隐藏即停采是为了避免日常复制粘贴被拦截，但这个默认规则会挡住
+    /// "边截图边收集、界面不入镜"的场景（窗口可见就会被截进画面）。
+    /// 该标记只被 MainWindow.IsVisibleChanged 的**隐藏**分支读取；窗口重新显示时立即复位，
+    /// 因此它表达的是"本次收起窗口别关监控"，而不是一个会忘记关闭的常驻模式。
+    ///
+    /// 刻意不持久化：重启回到"隐藏即停采"的安全默认。
+    /// </summary>
+    public bool KeepMonitoringWhileHidden
+    {
+        get => _keepMonitoringWhileHidden;
+        set
+        {
+            if (_keepMonitoringWhileHidden == value) return;
+            _keepMonitoringWhileHidden = value;
+            KeepMonitoringWhileHiddenChanged?.Invoke(this, value);
         }
     }
 
@@ -310,6 +332,9 @@ public sealed class AppState
 
     /// <summary>监控开关变化通知（newValue）。</summary>
     public event EventHandler<bool>? MonitoringChanged;
+
+    /// <summary>"后台采集"例外开关变化通知（newValue），供托盘刷新提示文案。</summary>
+    public event EventHandler<bool>? KeepMonitoringWhileHiddenChanged;
 
     /// <summary>活动分组变化通知（newGroupId，null=切回未分组）。</summary>
     public event EventHandler<string?>? ActiveGroupChanged;

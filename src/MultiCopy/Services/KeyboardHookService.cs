@@ -15,14 +15,16 @@ public sealed class KeyboardHookService : IDisposable
 {
     private readonly ClipboardQueue _queue;
     private readonly ClipboardService _clipboard;
+    private readonly ImageEncodeCache _imageCache;
     private readonly AppState _state = AppState.Instance;
     private IntPtr _hook = IntPtr.Zero;
     private LowLevelKeyboardProc? _proc; // 必须保持委托引用，防止 GC 回收导致钩子失效
 
-    public KeyboardHookService(ClipboardQueue queue, ClipboardService clipboard)
+    internal KeyboardHookService(ClipboardQueue queue, ClipboardService clipboard, ImageEncodeCache imageCache)
     {
         _queue = queue;
         _clipboard = clipboard;
+        _imageCache = imageCache;
     }
 
     public void Start()
@@ -78,8 +80,10 @@ public sealed class KeyboardHookService : IDisposable
                             if (writeOk) _state.RecordPastedText(textToPaste);
                             break;
                         case ImageClipboardItem imgItem:
-                            // 图片路径最坏情况 = 编码耗时 + 锁等待，同样收窄锁等待以控制总时长
-                            writeOk = _clipboard.SetClipboardImageSync(imgItem.Image, 150);
+                            // 图片路径绝不能在钩子回调里做 O(W×H) 编码：LowLevelHooksTimeout 默认
+                            // 300ms，超时会拖慢全系统输入并可能被系统静默摘钩（此后 Ctrl+V 失效）。
+                            // 正常情况队首图片已在入队/出队时完成后台预编码，此处只剩 memcpy 级写入。
+                            writeOk = WriteImageForHook(imgItem);
                             // 图片写失败：清空剪贴板（避免粘出上一条文本）
                             if (!writeOk) _clipboard.ClearClipboard();
                             break;
@@ -99,6 +103,27 @@ public sealed class KeyboardHookService : IDisposable
             }
         }
         return Win32.CallNextHookEx(_hook, nCode, wParam, lParam);
+    }
+
+    /// <summary>
+    /// 在钩子回调的时间预算内把图片写入剪贴板。
+    ///
+    /// 分层策略（按代价从低到高）：
+    /// 1. 缓存命中（正常路径）：PNG 与 CF_DIB 都已算好，写入只剩两次 GlobalAlloc + memcpy。
+    /// 2. 缓存未命中（刚采集就立刻 Ctrl+V，窗口约 1 秒）：只同步生成 CF_DIB——纯内存拷贝
+    ///    （实测 4096² 约 40ms），PNG 压缩才是耗时大头（约 160ms）；同时排队后台补全缓存。
+    ///    DIB 已被 Office / 画图 / 资源管理器 / 浏览器等绝大多数目标支持，降级影响可控。
+    /// 3. 编码失败：返回 false，由调用方清空剪贴板并**不出队**（条目保留可重试）。
+    /// </summary>
+    private bool WriteImageForHook(ImageClipboardItem item)
+    {
+        if (_imageCache.TryGet(item, out var encoded))
+            return _clipboard.SetClipboardImageEncodedSync(encoded, 150);
+
+        _imageCache.Prefetch(item); // 后台补全，下次粘贴走缓存
+        var dib = ImageEncoding.EncodeDib(item.Image);
+        if (dib == null) return false;
+        return _clipboard.SetClipboardImageEncodedSync(new EncodedImage { Dib = dib }, 150);
     }
 
     public void Dispose()

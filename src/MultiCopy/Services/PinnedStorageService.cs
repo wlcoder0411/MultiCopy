@@ -9,15 +9,18 @@ namespace MultiCopy.Services;
 /// <summary>
 /// 置顶项持久化服务。
 /// 将 PinnedItems 序列化为 JSON 存储到 %APPDATA%\MultiCopy\pinned.json，
-/// 图片项独立存为 %APPDATA%\MultiCopy\images\&lt;item.Id&gt;.png，索引只存文件名。
-/// 应用启动时加载、置顶操作时即时保存。
+/// 图片项独立存为 %APPDATA%\MultiCopy\images\&lt;item.Id&gt;.png，索引只存 Id 与文件名。
+/// 应用启动时加载、置顶操作后（延迟一拍）保存。
 ///
 /// 设计原理：
 /// - 置顶项是"用户偏好数据"（高频复用内容），应跨会话存活；普通队列项是临时数据，不持久化。
 /// - 多态 DTO：文本项存 Text，图片项存 ImageFile/Width/Height/Hash，用 [JsonPolymorphic] 区分。
+/// - **Id 必须落盘并在加载时还原**：它是 PNG 文件名的外键，每次会话重新生成会让文件名漂移，
+///   启动时的孤儿清理就会把上次会话的图片全部删除（进程被强杀即永久丢图）。
 /// - 图片文件用原子写（.tmp + File.Replace）；索引文件同样原子写。
 /// - Load 时图片文件缺失则跳过该项（索引在下次 Save 时被自然清理）。
-/// - Save 时清理孤儿图片文件（不在当前 PinnedItems 中的）。
+/// - 不在 Save 内清理孤儿图片：images 目录与 GroupStorageService 共享，
+///   只能由 App.CleanupOrphanImagesUnified 统一清理，否则会误删对方引用的图片。
 /// - 文件损坏时：记录日志 + 清空重建，不让用户卡在损坏数据上。
 /// - 存储路径用 Environment.SpecialFolder.ApplicationData（per-user，无权限问题）。
 /// </summary>
@@ -58,12 +61,14 @@ public static class PinnedStorageService
                     case TextPinnedItemDto textDto:
                         if (string.IsNullOrEmpty(textDto.Text)) continue; // 跳过空文本项
                         var textItem = new TextClipboardItem(textDto.Text, textDto.SourceApp ?? string.Empty, textDto.CreatedAt);
+                        textItem.RestoreId(textDto.Id);
                         textItem.IsPinned = true;
                         items.Add(textItem);
                         break;
 
                     case ImagePinnedItemDto imgDto:
-                        if (string.IsNullOrEmpty(imgDto.ImageFile)) continue;
+                        // 文件名来自不可信 json：必须是 images 目录内的纯文件名，否则跳过
+                        if (!IdGuard.IsSafeFileName(imgDto.ImageFile)) continue;
                         string imgPath = Path.Combine(ImagesDir, imgDto.ImageFile);
                         if (!File.Exists(imgPath))
                         {
@@ -76,6 +81,12 @@ public static class PinnedStorageService
                             if (bitmap == null) continue;
                             // ImageClipboardItem 构造时算的哈希应与持久化的哈希一致（同图同哈希）
                             var imgItem = new ImageClipboardItem(bitmap, imgDto.SourceApp ?? string.Empty, imgDto.CreatedAt);
+                            // Id 必须还原：它是 PNG 文件名的外键。旧版 DTO 没有 id 字段，
+                            // 此时从文件名反推（文件名本就是上次保存时的 Id），实现无损迁移；
+                            // id 非法（被手工改坏）时同样退回文件名，避免与磁盘文件对不上。
+                            imgItem.RestoreId(IdGuard.IsSafe(imgDto.Id)
+                                ? imgDto.Id!
+                                : Path.GetFileNameWithoutExtension(imgDto.ImageFile));
                             imgItem.IsPinned = true;
                             items.Add(imgItem);
                         }
@@ -114,6 +125,7 @@ public static class PinnedStorageService
                     case TextClipboardItem textItem:
                         dtos.Add(new TextPinnedItemDto
                         {
+                            Id = textItem.Id,
                             Text = textItem.Text,
                             SourceApp = textItem.SourceApp,
                             CreatedAt = textItem.CreatedAt,
@@ -130,6 +142,7 @@ public static class PinnedStorageService
                         }
                         dtos.Add(new ImagePinnedItemDto
                         {
+                            Id = imgItem.Id,
                             ImageFile = imgFileName,
                             Width = imgItem.Width,
                             Height = imgItem.Height,
@@ -219,6 +232,12 @@ public static class PinnedStorageService
     [JsonDerivedType(typeof(ImagePinnedItemDto), "image")]
     private abstract class PinnedItemDto
     {
+        /// <summary>
+        /// 条目 Id（图片文件名的外键）。必须落盘并在加载时还原，
+        /// 否则每次会话都会生成新 Id → PNG 文件名漂移 → 启动清理误删旧图。
+        /// 旧版文件无此字段（null），加载时由文件名反推。
+        /// </summary>
+        public string? Id { get; set; }
         public string? SourceApp { get; set; }
         public DateTime CreatedAt { get; set; }
     }

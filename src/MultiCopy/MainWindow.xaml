@@ -482,6 +482,10 @@
                         <ContextMenu Placement="Bottom"
                                      Style="{StaticResource {x:Type ContextMenu}}"
                                      DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
+                            <MenuItem Header="后台采集（收起窗口继续采集）"
+                                      ToolTip="收起窗口但保持监控：截图不会拍到界面，边截图边收集。再次显示窗口即恢复"
+                                      Click="BackgroundCapture_Click" />
+                            <Separator />
                             <MenuItem Header="清空普通队列" Command="{Binding ClearNormalCommand}" />
                             <MenuItem Header="切换为亮色主题" Command="{Binding ToggleThemeCommand}"
                                       Visibility="{Binding IsLightTheme, Converter={x:Static infra:InverseBoolToVisibilityConverter.Instance}}" />

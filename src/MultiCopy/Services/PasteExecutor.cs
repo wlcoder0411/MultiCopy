@@ -13,11 +13,13 @@ namespace MultiCopy.Services;
 public sealed class PasteExecutor
 {
     private readonly ClipboardService _clipboard;
+    private readonly ImageEncodeCache _imageCache;
     private readonly AppState _state = AppState.Instance;
 
-    public PasteExecutor(ClipboardService clipboard)
+    internal PasteExecutor(ClipboardService clipboard, ImageEncodeCache imageCache)
     {
         _clipboard = clipboard;
+        _imageCache = imageCache;
     }
 
     public void Execute(ClipboardItem item, bool keepAfterPaste, ClipboardQueue queue)
@@ -39,7 +41,12 @@ public sealed class PasteExecutor
                 break;
 
             case ImageClipboardItem imgItem:
-                writeOk = _clipboard.SetClipboardImageSync(imgItem.Image);
+                // 点选路径无钩子超时约束，但仍优先复用预编码结果：省掉一次 O(W×H) 编码，
+                // 避免点击大图时窗口明显卡顿。未命中才同步编码（一次性代价；点选后该项通常
+                // 即被移除，故不再回填缓存——缓存只服务仍留在队列里的队首）。
+                writeOk = _imageCache.TryGet(imgItem, out var encoded)
+                    ? _clipboard.SetClipboardImageEncodedSync(encoded, 250)
+                    : _clipboard.SetClipboardImageSync(imgItem.Image);
                 // 图片写失败：清空剪贴板再返回（避免粘出上一条文本，明确告知失败）
                 if (!writeOk)
                 {

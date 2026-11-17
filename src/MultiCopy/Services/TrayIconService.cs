@@ -58,6 +58,9 @@ public sealed class TrayIconService : IDisposable
         _state.ModeChanged += OnModeChanged;
         _state.MonitoringChanged += OnMonitoringChanged;
         _state.QueueFullNotification += OnQueueFull;
+        _state.KeepMonitoringWhileHiddenChanged += OnKeepMonitoringChanged;
+        // 窗口显隐会改变 tooltip 的"后台采集中"前缀，需一并刷新
+        _window.IsVisibleChanged += OnWindowVisibleChangedForToolTip;
         _queue.Changed += OnQueueChangedForToolTip;
         _state.QueueCapacityChanged += OnQueueCapacityChangedForToolTip;
         UpdateTrayToolTip();
@@ -80,6 +83,25 @@ public sealed class TrayIconService : IDisposable
         var miSnippet = new MenuItem { Header = "片段速取(_Q)" };
         miSnippet.Click += (_, _) => _window.OpenSnippetPalette();
         menu.Items.Add(miSnippet);
+
+        // 后台采集：收起窗口但保留监控，供"边截图边收集、界面不入镜"使用。
+        // 一次性动作（不带勾选态）：窗口再次显示即恢复默认的"隐藏即停采"。
+        var miBackgroundCapture = new MenuItem
+        {
+            Header = "后台采集(_B)",
+            ToolTip = "收起窗口但保持监控：截图不会拍到界面。再次显示窗口即恢复",
+        };
+        miBackgroundCapture.Click += (_, _) =>
+        {
+            // 延迟到托盘菜单关闭之后：菜单是独立 Popup，立即 Hide() 可能让它残留在屏幕上，
+            // 正好被下一次截图拍进去
+            _window.Dispatcher.BeginInvoke(() =>
+            {
+                if (!_window.EnterBackgroundCapture())
+                    ShowBackgroundCaptureBlockedTip();
+            }, DispatcherPriority.Background);
+        };
+        menu.Items.Add(miBackgroundCapture);
 
         // 窗口置顶开关（状态持久化由 MainWindow.SetTopmost 负责）
         _miTopmost = new MenuItem { Header = "窗口置顶(_P)", IsCheckable = true, IsChecked = _window.Topmost };
@@ -184,19 +206,46 @@ public sealed class TrayIconService : IDisposable
         _tray?.ShowBalloonTip("MultiCopy", "粘贴目标未就绪：请先点击目标窗口定位光标，再点选内容", BalloonIcon.Warning);
     }
 
-    /// <summary>根据模式和监控状态更新托盘 Tooltip。</summary>
+    /// <summary>根据监控 / 后台采集 / 队列模式更新托盘 Tooltip。</summary>
     private void UpdateTrayToolTip()
     {
         if (_tray == null) return;
         if (!_state.IsMonitoring)
         {
             _tray.ToolTipText = "MultiCopy — 监控已关闭（静默待机）";
+            return;
         }
-        else
-        {
-            string mode = _state.ModeOn ? "队列粘贴模式：开" : "队列粘贴模式：关";
-            _tray.ToolTipText = $"MultiCopy — {_queue.NormalCount}/{_state.MaxQueueItems} 条 · {mode}";
-        }
+
+        string mode = _state.ModeOn ? "队列粘贴模式：开" : "队列粘贴模式：关";
+        // 窗口收起 + 例外标记 = 正在后台采集。必须让用户看得出来"它还在采"，
+        // 否则"窗口没了但还在记录剪贴板"是不可见状态，容易造成隐私困扰。
+        string state = _state.KeepMonitoringWhileHidden && !_window.IsVisible
+            ? "后台采集中 · "
+            : string.Empty;
+        _tray.ToolTipText = $"MultiCopy — {state}{_queue.NormalCount}/{_state.MaxQueueItems} 条 · {mode}";
+    }
+
+    /// <summary>"后台采集"例外开关变化：刷新 tooltip 文案。</summary>
+    private void OnKeepMonitoringChanged(object? sender, bool value) => UpdateTrayToolTip();
+
+    /// <summary>窗口显隐变化：tooltip 的"后台采集中"前缀依赖可见性。</summary>
+    private void OnWindowVisibleChangedForToolTip(object? sender,
+        System.Windows.DependencyPropertyChangedEventArgs e) => UpdateTrayToolTip();
+
+    /// <summary>进入后台采集后的说明气泡：避免用户把"窗口消失"误判为程序退出。</summary>
+    public void ShowBackgroundCaptureTip()
+    {
+        _tray?.ShowBalloonTip("MultiCopy",
+            "已在后台采集：截图不会把界面拍进去。队列粘贴模式开启时 Ctrl+V 仍会出队。按 Alt+Z 或双击托盘叫回窗口即恢复。",
+            BalloonIcon.Info);
+    }
+
+    /// <summary>有其他窗口挡着、无法进入后台采集时说明原因（否则用户只看到"点了没反应"）。</summary>
+    public void ShowBackgroundCaptureBlockedTip()
+    {
+        _tray?.ShowBalloonTip("MultiCopy",
+            "请先关闭设置 / 片段库 / 使用说明等其他窗口，再进入后台采集——它们也会被截进画面。",
+            BalloonIcon.Info);
     }
 
     /// <summary>队列变化时刷新托盘 tooltip 的计数。</summary>
@@ -341,6 +390,8 @@ public sealed class TrayIconService : IDisposable
         _state.ModeChanged -= OnModeChanged;
         _state.MonitoringChanged -= OnMonitoringChanged;
         _state.QueueFullNotification -= OnQueueFull;
+        _state.KeepMonitoringWhileHiddenChanged -= OnKeepMonitoringChanged;
+        _window.IsVisibleChanged -= OnWindowVisibleChangedForToolTip;
         _queue.Changed -= OnQueueChangedForToolTip;
         _state.QueueCapacityChanged -= OnQueueCapacityChangedForToolTip;
         if (_autoStartRecheckTimer != null)

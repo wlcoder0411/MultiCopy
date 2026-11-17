@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
-using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using MultiCopy.Native;
 using MultiCopy.State;
@@ -11,7 +10,10 @@ namespace MultiCopy.Services;
 /// <summary>
 /// 纯 Win32 剪贴板读写封装。
 /// 写操作会前置 <see cref="AppState.IsWritingClipboard"/> 以防自身回环。
-/// 所有方法须在 UI 线程调用（与监听器/钩子同线程，避免剪贴板锁竞争）。
+/// 所有 Win32 调用（OpenClipboard / SetClipboardData 等）须在 UI 线程执行
+/// （与监听器/钩子同线程，避免剪贴板锁竞争与回环标志竞态）；
+/// 但图片编码本身已抽到 <see cref="ImageEncoding"/>，可由后台线程预执行
+/// （见 <see cref="ImageEncodeCache"/>），与此约定不冲突。
 /// </summary>
 public sealed class ClipboardService
 {
@@ -268,13 +270,31 @@ public sealed class ClipboardService
     /// 同时写 PNG 与 CF_DIB 两种格式以兼容不同粘贴目标。
     /// 成功返回 true 且系统接管 hGlobal（勿 Free）；超时返回 false。
     /// 在 EmptyClipboard 成功后才置位 IsWritingClipboard（沿用已修复约定）。
+    ///
+    /// 注意：本方法会在调用线程上同步编码（O(W×H)）。低级键盘钩子路径必须改用
+    /// <see cref="SetClipboardImageEncodedSync"/> + <see cref="ImageEncodeCache"/>，
+    /// 否则大图编码会突破 LowLevelHooksTimeout 拖慢全系统输入。
     /// </summary>
     public bool SetClipboardImageSync(BitmapSource image, int timeoutMs = 250)
     {
-        // 预编码 PNG 和 DIB 字节流（剪贴板外，无锁）
-        byte[]? pngBytes = EncodePng(image);
-        byte[]? dibBytes = EncodeDib(image);
-        if (pngBytes == null || dibBytes == null) return false;
+        var pngBytes = ImageEncoding.EncodePng(image);
+        var dibBytes = ImageEncoding.EncodeDib(image);
+        if (pngBytes == null && dibBytes == null) return false;
+
+        return SetClipboardImageEncodedSync(
+            new EncodedImage { Png = pngBytes, Dib = dibBytes }, timeoutMs);
+    }
+
+    /// <summary>
+    /// 用预编码字节流写图片剪贴板：Png/Dib 为 null 表示跳过该格式。
+    ///
+    /// 返回值语义（此前是缺陷）：**至少一种格式写入成功**才返回 true。旧实现无论
+    /// 两路 SetClipboardData 是否全部失败都返回 true，调用方据此"乐观出队"，
+    /// 结果剪贴板已被 EmptyClipboard 清空、目标应用粘出空白、队列条目永久丢失。
+    /// </summary>
+    internal bool SetClipboardImageEncodedSync(EncodedImage encoded, int timeoutMs = 150)
+    {
+        if (encoded.Png == null && encoded.Dib == null) return false;
 
         var sw = Stopwatch.StartNew();
         while (sw.ElapsedMilliseconds < timeoutMs)
@@ -291,25 +311,10 @@ public sealed class ClipboardService
                     return false;
                 _state.IsWritingClipboard = true;
 
-                // 写 PNG：失败则自己释放内存
-                IntPtr hPng = WriteDataToClipboard(pngBytes);
-                if (hPng != IntPtr.Zero)
-                {
-                    if (Win32.SetClipboardData(Constants.PngFormatId, hPng) == IntPtr.Zero)
-                        Win32.GlobalFree(hPng);
-                    // 成功：系统接管 hPng，不要 Free
-                }
-
-                // 写 CF_DIB：失败则自己释放内存
-                IntPtr hDib = WriteDataToClipboard(dibBytes);
-                if (hDib != IntPtr.Zero)
-                {
-                    if (Win32.SetClipboardData(Constants.CF_DIB, hDib) == IntPtr.Zero)
-                        Win32.GlobalFree(hDib);
-                    // 成功：系统接管 hDib，不要 Free
-                }
-
-                return true;
+                // 两种格式各自独立成败：任一成功即视为本次写入成功（目标可按支持格式取用）
+                bool pngOk = encoded.Png != null && WriteClipboardFormat(Constants.PngFormatId, encoded.Png);
+                bool dibOk = encoded.Dib != null && WriteClipboardFormat(Constants.CF_DIB, encoded.Dib);
+                return pngOk || dibOk;
             }
             finally
             {
@@ -317,6 +322,21 @@ public sealed class ClipboardService
             }
         }
         return false;
+    }
+
+    /// <summary>
+    /// 写入一种剪贴板格式。分配失败或 SetClipboardData 失败均返回 false 并自行释放内存。
+    /// </summary>
+    private static bool WriteClipboardFormat(uint format, byte[] data)
+    {
+        IntPtr hGlobal = WriteDataToClipboard(data);
+        if (hGlobal == IntPtr.Zero) return false;
+        if (Win32.SetClipboardData(format, hGlobal) == IntPtr.Zero)
+        {
+            Win32.GlobalFree(hGlobal); // 系统没接管，自己释放
+            return false;
+        }
+        return true; // 成功：系统接管 hGlobal，不要 Free
     }
 
     /// <summary>
@@ -341,69 +361,5 @@ public sealed class ClipboardService
             Win32.GlobalUnlock(hGlobal);
         }
         return hGlobal; // 系统接管，调用方成功后不要 Free
-    }
-
-    /// <summary>编码 BitmapSource 为 PNG 字节流。</summary>
-    private static byte[]? EncodePng(BitmapSource image)
-    {
-        try
-        {
-            var enc = new PngBitmapEncoder();
-            enc.Frames.Add(BitmapFrame.Create(image));
-            using var ms = new MemoryStream();
-            enc.Save(ms);
-            return ms.ToArray();
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    /// <summary>
-    /// 编码 BitmapSource 为 CF_DIB 字节流（BITMAPINFOHEADER + 像素，bottom-up）。
-    /// 转 Bgra32 提取像素并按行翻转（DIB 像素自下而上存储）。
-    /// </summary>
-    private static byte[]? EncodeDib(BitmapSource image)
-    {
-        try
-        {
-            // 转 Bgra32（含 alpha，32 位）
-            var converted = new FormatConvertedBitmap(image, PixelFormats.Bgra32, null, 0);
-            converted.Freeze();
-            int width = converted.PixelWidth;
-            int height = converted.PixelHeight;
-            int stride = width * 4;
-            byte[] pixels = new byte[stride * height];
-            converted.CopyPixels(pixels, stride, 0);
-
-            // DIB 像素是 bottom-up，需要翻转行
-            byte[] flipped = new byte[pixels.Length];
-            for (int y = 0; y < height; y++)
-            {
-                Array.Copy(pixels, y * stride, flipped, (height - 1 - y) * stride, stride);
-            }
-
-            // BITMAPINFOHEADER (40 字节) + 像素
-            var ms = new MemoryStream();
-            using var bw = new BinaryWriter(ms);
-            bw.Write(40);              // biSize
-            bw.Write(width);           // biWidth
-            bw.Write(height);          // biHeight（正数=bottom-up）
-            bw.Write((ushort)1);       // biPlanes
-            bw.Write((ushort)32);      // biBitCount
-            bw.Write(0);               // biCompression = BI_RGB
-            bw.Write(pixels.Length);   // biSizeImage
-            bw.Write(0);               // biXPelsPerMeter
-            bw.Write(0);               // biYPelsPerMeter
-            bw.Write(0);               // biClrUsed
-            bw.Write(0);               // biClrImportant
-            bw.Write(flipped, 0, flipped.Length);
-            return ms.ToArray();
-        }
-        catch
-        {
-            return null;
-        }
     }
 }

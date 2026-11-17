@@ -1,5 +1,4 @@
 using System.IO;
-using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Windows.Media.Imaging;
@@ -55,8 +54,9 @@ public static class GroupStorageService
             {
                 if (string.IsNullOrEmpty(gDto.Name)) continue;
 
-                // 用 DTO 的 Id 恢复分组（保持 Id 跨会话稳定，便于活动分组引用）
-                var g = CreateGroupWithId(gDto.Id, gDto.Name, gDto.CreatedAt);
+                // 用 DTO 的 Id / CreatedAt 恢复分组身份（保持 Id 跨会话稳定，便于活动分组引用）
+                var g = new ClipboardGroup(gDto.Name);
+                g.RestoreIdentity(gDto.Id, gDto.CreatedAt);
                 g.IsExpanded = gDto.IsExpanded;
                 g.IsPinned = gDto.IsPinned;
                 g.PinnedAt = gDto.PinnedAt;
@@ -68,11 +68,13 @@ public static class GroupStorageService
                         case TextItemDto textDto:
                             if (string.IsNullOrEmpty(textDto.Text)) continue;
                             var textItem = new TextClipboardItem(textDto.Text, textDto.SourceApp ?? string.Empty, textDto.CreatedAt);
+                            textItem.RestoreId(textDto.Id);
                             g.Items.Add(textItem);
                             break;
 
                         case ImageItemDto imgDto:
-                            if (string.IsNullOrEmpty(imgDto.ImageFile)) continue;
+                            // 文件名来自不可信 json：必须是 images 目录内的纯文件名，否则跳过
+                            if (!IdGuard.IsSafeFileName(imgDto.ImageFile)) continue;
                             string imgPath = Path.Combine(ImagesDir, imgDto.ImageFile);
                             if (!File.Exists(imgPath)) continue;
                             try
@@ -80,6 +82,11 @@ public static class GroupStorageService
                                 var bitmap = LoadImageFromFile(imgPath);
                                 if (bitmap == null) continue;
                                 var imgItem = new ImageClipboardItem(bitmap, imgDto.SourceApp ?? string.Empty, imgDto.CreatedAt);
+                                // 与 PinnedStorageService 同约定：Id 是 PNG 文件名外键，必须还原；
+                                // 旧版 DTO 无 id 字段（或 id 非法）时从文件名反推（文件名即上次保存时的 Id）
+                                imgItem.RestoreId(IdGuard.IsSafe(imgDto.Id)
+                                    ? imgDto.Id!
+                                    : Path.GetFileNameWithoutExtension(imgDto.ImageFile));
                                 g.Items.Add(imgItem);
                             }
                             catch { continue; }
@@ -130,6 +137,7 @@ public static class GroupStorageService
                         case TextClipboardItem textItem:
                             gDto.Items.Add(new TextItemDto
                             {
+                                Id = textItem.Id,
                                 Text = textItem.Text,
                                 SourceApp = textItem.SourceApp,
                                 CreatedAt = textItem.CreatedAt,
@@ -145,6 +153,7 @@ public static class GroupStorageService
                             }
                             gDto.Items.Add(new ImageItemDto
                             {
+                                Id = imgItem.Id,
                                 ImageFile = imgFileName,
                                 Width = imgItem.Width,
                                 Height = imgItem.Height,
@@ -219,6 +228,8 @@ public static class GroupStorageService
     [JsonDerivedType(typeof(ImageItemDto), "image")]
     private abstract class ItemDto
     {
+        /// <summary>条目 Id（图片文件名的外键），必须落盘并在加载时还原。</summary>
+        public string? Id { get; set; }
         public string? SourceApp { get; set; }
         public DateTime CreatedAt { get; set; }
     }
@@ -234,24 +245,5 @@ public static class GroupStorageService
         public int Width { get; set; }
         public int Height { get; set; }
         public string Hash { get; set; } = string.Empty;
-    }
-
-    /// <summary>
-    /// 用指定 Id 和创建时间创建 ClipboardGroup（恢复持久化分组时用）。
-    /// ClipboardGroup.Id / CreatedAt 是只读自动属性（{ get; }），无 setter，
-    /// 故通过反射直接设置编译器生成的后背字段（&lt;PropertyName&gt;k__BackingField）。
-    /// </summary>
-    private static ClipboardGroup CreateGroupWithId(string id, string name, DateTime createdAt)
-    {
-        var g = new ClipboardGroup(name);
-        var type = typeof(ClipboardGroup);
-        var flags = BindingFlags.NonPublic | BindingFlags.Instance;
-
-        if (!string.IsNullOrEmpty(id))
-        {
-            type.GetField("<Id>k__BackingField", flags)?.SetValue(g, id);
-        }
-        type.GetField("<CreatedAt>k__BackingField", flags)?.SetValue(g, createdAt);
-        return g;
     }
 }

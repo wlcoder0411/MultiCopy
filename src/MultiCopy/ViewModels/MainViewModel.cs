@@ -126,6 +126,7 @@ public sealed partial class MainViewModel : ObservableObject
     /// </summary>
     public string FeatureHint { get; } =
         "• Alt+S 片段速取 · 悬停图片预览 · 单击粘贴 / 双击置顶保留\n" +
+        "• 截图时界面不想入镜：托盘「后台采集」收起窗口但继续采集\n" +
         "• 队列粘贴开启后 Ctrl+V 按序出队\n" +
         "• 右键条目：置顶 / 移动到分组 / 按行拆分 / 存入片段库\n" +
         "• 点击分组标签 = 新复制归入该组 · 拖动标签排序 · 右键管理\n" +

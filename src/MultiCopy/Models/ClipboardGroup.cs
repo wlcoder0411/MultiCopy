@@ -10,8 +10,8 @@ namespace MultiCopy.Models;
 /// </summary>
 public sealed partial class ClipboardGroup : ObservableObject
 {
-    /// <summary>唯一标识。</summary>
-    public string Id { get; } = Guid.NewGuid().ToString("N");
+    /// <summary>唯一标识（跨会话稳定，活动分组引用依赖它）。</summary>
+    public string Id { get; private set; } = Guid.NewGuid().ToString("N");
 
     [ObservableProperty]
     private string _name;
@@ -35,10 +35,21 @@ public sealed partial class ClipboardGroup : ObservableObject
     public ObservableCollection<ClipboardItem> Items { get; } = new();
 
     /// <summary>创建时间，用于分组排序（先建在上）。</summary>
-    public DateTime CreatedAt { get; } = DateTime.Now;
+    public DateTime CreatedAt { get; private set; } = DateTime.Now;
 
     public ClipboardGroup(string name)
     {
         _name = name ?? "未命名分组";
+    }
+
+    /// <summary>
+    /// 还原持久化的身份字段（仅持久化层在反序列化时调用）。
+    /// 直接改属性而不是反射私有后背字段：反射依赖编译器生成字段名（&lt;Id&gt;k__BackingField），
+    /// 一旦加 trimming/AOT 或编译器命名变化就静默失效。
+    /// </summary>
+    internal void RestoreIdentity(string? id, DateTime createdAt)
+    {
+        if (IdGuard.IsSafe(id)) Id = id!;
+        if (createdAt != default) CreatedAt = createdAt;
     }
 }

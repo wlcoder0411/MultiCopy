@@ -12,8 +12,19 @@ namespace MultiCopy.Models;
 /// </summary>
 public abstract partial class ClipboardItem : ObservableObject
 {
-    /// <summary>唯一标识，用于 UI 跟踪与置顶 pending 标记。</summary>
-    public string Id { get; } = Guid.NewGuid().ToString("N");
+    /// <summary>
+    /// 唯一标识，用于 UI 跟踪、编码缓存键与**图片文件名的外键**（images\&lt;Id&gt;.png）。
+    /// 必须跨会话稳定：若每次加载都重新生成，图片文件名会漂移，启动时的孤儿清理
+    /// 会把上次会话写下的 PNG 全部当孤儿删除（进程被强杀即永久丢图）。
+    /// 因此持久化层通过 <see cref="RestoreId"/> 还原，而不是依赖初始化器。
+    /// </summary>
+    public string Id { get; private set; } = Guid.NewGuid().ToString("N");
+
+    /// <summary>还原持久化的 Id（仅持久化层在反序列化时调用；非法或空值保持新生成的 Id）。</summary>
+    internal void RestoreId(string? id)
+    {
+        if (IdGuard.IsSafe(id)) Id = id!;
+    }
 
     /// <summary>来源应用窗口标题（复制/截图时抓取）。</summary>
     public string SourceApp { get; }

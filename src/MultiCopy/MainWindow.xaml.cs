@@ -74,10 +74,14 @@ public partial class MainWindow : Window
         };
         // 窗口可见性联动监控开关：隐藏至托盘→关监控，恢复显示→开监控
         // 覆盖所有入口（最小化按钮/关闭按钮/托盘菜单/快捷键），无需逐处替换 Hide()
+        // 唯一例外：用户显式点了「后台采集」（KeepMonitoringWhileHidden=true）时，
+        // 隐藏不关监控——用于"边截图边收集、界面不入镜"；窗口一显示该例外即复位。
         IsVisibleChanged += (_, _) =>
         {
             if (IsVisible)
             {
+                // 窗口回来了：一次性例外到此结束，回到「隐藏即停采」的默认规则
+                AppState.Instance.KeepMonitoringWhileHidden = false;
                 // 恢复显示时自动开启监控（联动：最小化至托盘关、恢复显示开）
                 AppState.Instance.IsMonitoring = true;
                 // 重新断言置顶：显示/隐藏循环后 HWND 的 Z 序可能被系统或其它程序改动
@@ -85,8 +89,10 @@ public partial class MainWindow : Window
             }
             else
             {
-                // 隐藏至托盘时自动关闭监控（避免日常复制粘贴被拦截）
-                AppState.Instance.IsMonitoring = false;
+                // 隐藏至托盘时自动关闭监控（避免日常复制粘贴被拦截）；
+                // 「后台采集」例外下保留监控，否则收起窗口后就采不到截图了
+                if (!AppState.Instance.KeepMonitoringWhileHidden)
+                    AppState.Instance.IsMonitoring = false;
                 if (_searchActive)
                 {
                     _searchActive = false;
@@ -445,6 +451,67 @@ public partial class MainWindow : Window
             // 失败不影响其他功能（与 SearchBox_GotFocus 容错策略一致）
         }
     }
+
+    /// <summary>
+    /// 进入「后台采集」：确保监控开启并把窗口收进托盘。
+    ///
+    /// 解决的问题：窗口默认置顶且尺寸不小，任何全屏/大区域截图都会把它拍进去；
+    /// 而"隐藏即停采"的默认规则又让"收起窗口"和"继续采集"无法同时成立。
+    /// 这里通过 <see cref="AppState.KeepMonitoringWhileHidden"/> 给隐藏动作开一次例外。
+    ///
+    /// 语义边界：这是一次性动作，不是常驻模式——窗口再次显示时由 IsVisibleChanged 复位，
+    /// 因此不存在"忘了关、一直在后台偷偷采集"的状态。动作名即意图，所以会顺带把监控打开
+    /// （若用户明确想停采，托盘「监控剪贴板」始终是最终权威）。
+    ///
+    /// 返回 false 表示当前有对话框打开、没有执行（Owner 被隐藏会让对话框孤立在屏幕上）。
+    /// </summary>
+    public bool EnterBackgroundCapture()
+    {
+        // 先收掉主窗口自己的浮层（图像预览、提示气泡）：它们不属于"其他窗口"，
+        // 关掉即可，不该因此拒绝进入
+        CloseImagePreview();
+        HintPopup.IsOpen = false;
+
+        // 只要有其他可见的本程序窗口（设置 / 片段库 / 帮助…）就拒绝：
+        // 它们和主窗口一样会被截进画面，而提示语承诺"不会拍进去"，不能自相矛盾。
+        // 这里用 Application.Windows 而不是 OwnedWindows：片段库等是 modeless 且不设 Owner。
+        foreach (Window w in Application.Current.Windows)
+        {
+            if (ReferenceEquals(w, this)) continue;
+            // 图像预览与片段速取窗都是瞬态浮层（失焦/移动即关），不该因它们拒绝进入
+            if (w is ImagePreviewWindow or SnippetPaletteWindow) continue;
+            if (w.IsVisible) return false;
+        }
+
+        // 已经在「窗口收起 + 保留监控」状态时重复点击：只确保监控开启，不重复提示
+        bool alreadyActive = !IsVisible && AppState.Instance.KeepMonitoringWhileHidden;
+
+        AppState.Instance.IsMonitoring = true;
+        AppState.Instance.KeepMonitoringWhileHidden = true;
+
+        // 走统一隐藏路径：保存窗口状态、关闭预览窗与提示浮层，与其他隐藏入口一致
+        if (IsVisible) Hide();
+
+        if (!alreadyActive) BackgroundCaptureEntered?.Invoke(this, EventArgs.Empty);
+        return true;
+    }
+
+    /// <summary>进入后台采集后触发（供托盘弹一次说明气泡，避免"窗口消失=退出了"的误判）。</summary>
+    public event EventHandler? BackgroundCaptureEntered;
+
+    /// <summary>进入后台采集被拒（有其他窗口挡着）时触发，供托盘给出明确原因。</summary>
+    public event EventHandler? BackgroundCaptureDeclined;
+
+    /// <summary>
+    /// 菜单项入口。延迟到菜单关闭之后执行：若在同一次点击里立即 Hide()，
+    /// 右键菜单/Popup 可能仍在关闭动画中，会残留在屏幕上被截进图里。
+    /// </summary>
+    private void BackgroundCapture_Click(object sender, RoutedEventArgs e)
+        => Dispatcher.BeginInvoke(new Action(() =>
+        {
+            if (!EnterBackgroundCapture())
+                BackgroundCaptureDeclined?.Invoke(this, EventArgs.Empty);
+        }), System.Windows.Threading.DispatcherPriority.Background);
 
     /// <summary>
     /// 重新断言窗口置顶。
